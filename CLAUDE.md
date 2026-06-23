@@ -11,16 +11,20 @@
 JSON-файлом, умеет импортировать JSON и пересчитывать.
 
 Стек: **Next.js 14 (App Router) + TypeScript + Tailwind**, `@react-pdf/renderer` (PDF),
-`exceljs` (Excel), `zod` (валидация), `vitest` (тесты).
+`exceljs` (Excel), `zod` (валидация), `vitest` (тесты), **Postgres** (Neon/Supabase) через `pg`.
 
 ## Команды
 
 ```bash
-npm run dev     # dev (порт 3000, при занятости — 3001 и т.д.)
+npm run dev     # dev (порт 3000, при занятости — 3001 и т.д.); нужен DATABASE_URL в .env.local
 npm run build   # прод-сборка (заодно полная проверка типов)
-npm test        # юнит-тесты расчёта
+npm test        # юнит-тесты расчёта (БД не требуется — calc чистый)
 npx tsc --noEmit
 ```
+
+Хранилищу нужен Postgres: задать `DATABASE_URL` в `.env.local` (шаблон — `.env.example`).
+Локально проще всего поднять контейнер:
+`docker run -d -e POSTGRES_PASSWORD=test -e POSTGRES_DB=seocp -p 5432:5432 postgres:16-alpine`.
 
 ## Карта кода
 
@@ -30,7 +34,12 @@ npx tsc --noEmit
 - `lib/works-catalog.ts` — 5 направлений и их работы (из `sources/Разбивка SEO по блокам работ.md`).
 - `lib/company.ts` — фирстиль Qmedia: цвета (`BRAND`, **green-forward**), ассеты (`BRAND_ASSETS`),
   фото (`PHOTOS`), контакты/факты (`COMPANY`), преимущества.
-- `lib/storage.ts` — файловое хранилище в `data/proposals/<id>.json` (папка в `.gitignore`).
+- `lib/storage.ts` — хранилище КП в Postgres (таблица `proposals(id, created_at, data jsonb)`).
+  Сигнатуры `buildProposal/saveProposal/getProposal/deleteProposal/listProposals` те же, что
+  были у прежнего файлового варианта — роуты не менялись.
+- `lib/db.ts` — singleton-пул `pg` по `DATABASE_URL` (Neon/Supabase) + ленивое
+  `ensureSchema()` (идемпотентный `CREATE TABLE IF NOT EXISTS`). SSL включается автоматически
+  для удалённых хостов, для `localhost` выключен.
 - `lib/pdf/ProposalPdf.tsx` — PDF-документ (A4 landscape) по референсу `sources/cp-development.pdf`:
   обложка (фото + зелёный оверлей + белый логотип + Q-watermark), `HeaderBand` (зелёный градиент-
   колонтитул с Q-watermark, `fixed`), слайды «Смета» → «Направления» → «О Qmedia», подвал.
@@ -86,7 +95,11 @@ npx tsc --noEmit
 - **`Buffer` → `Response`.** TS ругается на `BodyInit`; оборачивать в `new Uint8Array(buffer)`.
 - **Бутстрап.** Папка не пустая (`sources/`) — `create-next-app` откажется; проект собран
   конфигами вручную.
-- **`data/`** — общий каталог хранилища; gitignored. Несколько запущенных инстансов делят его.
+- **Хранилище — Postgres, не файлы.** Раньше КП лежали в `data/proposals/*.json`; на serverless
+  (Vercel) ФС эфемерна и данные терялись бы. Теперь — таблица `proposals` в Postgres
+  (Neon/Supabase), `data jsonb`. На Vercel в `DATABASE_URL` класть **pooled/pooler** строку
+  подключения (иначе можно упереться в лимит коннектов). Колонка `id` — `text` (id всегда из
+  `crypto.randomUUID`), чтобы не ловить ошибки каста `uuid` на «мусорных» id.
 - Тяжёлые пакеты (`@react-pdf/renderer`, `exceljs`) вынесены во внешние через
   `serverComponentsExternalPackages` в `next.config.mjs`.
 

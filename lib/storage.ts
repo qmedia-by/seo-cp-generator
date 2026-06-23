@@ -1,24 +1,12 @@
-// Файловое хранилище КП: каждый КП — отдельный JSON в data/proposals/<id>.json.
+// Хранилище КП в Postgres (Neon/Supabase): таблица proposals(id, created_at, data jsonb).
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import { calculate } from "./calc";
+import { ensureSchema, getPool } from "./db";
 import type { CreateProposalPayload } from "./validation";
 import type { Proposal } from "./types";
 
-const DATA_DIR = path.join(process.cwd(), "data", "proposals");
-
-/** id состоит только из hex/дефисов (как у crypto.randomUUID) — защита от path traversal. */
+/** id состоит только из hex/дефисов (как у crypto.randomUUID). Некорректный → «не найдено». */
 const ID_RE = /^[a-f0-9-]{8,64}$/i;
-
-async function ensureDir(): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-}
-
-function fileFor(id: string): string {
-  if (!ID_RE.test(id)) throw new Error("Некорректный id");
-  return path.join(DATA_DIR, `${id}.json`);
-}
 
 /** Собрать Proposal из входных данных: посчитать снимок расчёта, выдать id и дату. */
 export function buildProposal(payload: CreateProposalPayload): Proposal {
@@ -34,32 +22,31 @@ export function buildProposal(payload: CreateProposalPayload): Proposal {
 }
 
 export async function saveProposal(proposal: Proposal): Promise<void> {
-  await ensureDir();
-  await fs.writeFile(
-    fileFor(proposal.id),
-    JSON.stringify(proposal, null, 2),
-    "utf-8",
+  await ensureSchema();
+  await getPool().query(
+    `INSERT INTO proposals (id, created_at, data)
+     VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (id) DO UPDATE
+       SET created_at = EXCLUDED.created_at, data = EXCLUDED.data`,
+    [proposal.id, proposal.createdAt, JSON.stringify(proposal)],
   );
 }
 
 export async function getProposal(id: string): Promise<Proposal | null> {
-  try {
-    const raw = await fs.readFile(fileFor(id), "utf-8");
-    return JSON.parse(raw) as Proposal;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
-    throw err;
-  }
+  if (!ID_RE.test(id)) return null;
+  await ensureSchema();
+  const res = await getPool().query<{ data: Proposal }>(
+    `SELECT data FROM proposals WHERE id = $1`,
+    [id],
+  );
+  return res.rows[0]?.data ?? null;
 }
 
 export async function deleteProposal(id: string): Promise<boolean> {
-  try {
-    await fs.unlink(fileFor(id));
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
+  if (!ID_RE.test(id)) return false;
+  await ensureSchema();
+  const res = await getPool().query(`DELETE FROM proposals WHERE id = $1`, [id]);
+  return (res.rowCount ?? 0) > 0;
 }
 
 /** Краткая карточка КП для списка. */
@@ -90,19 +77,9 @@ function toSummary(p: Proposal): ProposalSummary {
 }
 
 export async function listProposals(): Promise<ProposalSummary[]> {
-  await ensureDir();
-  const files = (await fs.readdir(DATA_DIR)).filter((f) => f.endsWith(".json"));
-  const items = await Promise.all(
-    files.map(async (f) => {
-      try {
-        const raw = await fs.readFile(path.join(DATA_DIR, f), "utf-8");
-        return toSummary(JSON.parse(raw) as Proposal);
-      } catch {
-        return null;
-      }
-    }),
+  await ensureSchema();
+  const res = await getPool().query<{ data: Proposal }>(
+    `SELECT data FROM proposals ORDER BY created_at DESC`,
   );
-  return items
-    .filter((x): x is ProposalSummary => x !== null)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return res.rows.map((r) => toSummary(r.data));
 }
