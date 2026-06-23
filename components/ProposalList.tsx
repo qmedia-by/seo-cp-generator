@@ -80,7 +80,7 @@ export default function ProposalList() {
           >
             {importing ? "Импорт…" : "Импорт JSON"}
           </button>
-          <Link href="/new" className="ui-btn-accent">
+          <Link href="/new" className="ui-btn-primary">
             + Создать КП
           </Link>
         </div>
@@ -103,7 +103,7 @@ export default function ProposalList() {
           {items.map((it) => (
             <div
               key={it.id}
-              className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-3"
+              className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-3 transition hover:border-brand-green/50 hover:shadow-sm"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>

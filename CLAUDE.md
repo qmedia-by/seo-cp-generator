@@ -28,10 +28,14 @@ npx tsc --noEmit
   `sources/Расчет SEO.xlsx`). Тут же списки опций для форм.
 - `lib/calc.ts` — чистая функция `calculate(input, directions)`. Логика 1:1 с Excel.
 - `lib/works-catalog.ts` — 5 направлений и их работы (из `sources/Разбивка SEO по блокам работ.md`).
-- `lib/company.ts` — фирстиль Qmedia: цвета (`BRAND`), контакты/факты (`COMPANY`), преимущества.
+- `lib/company.ts` — фирстиль Qmedia: цвета (`BRAND`, **green-forward**), ассеты (`BRAND_ASSETS`),
+  фото (`PHOTOS`), контакты/факты (`COMPANY`), преимущества.
 - `lib/storage.ts` — файловое хранилище в `data/proposals/<id>.json` (папка в `.gitignore`).
-- `lib/pdf/ProposalPdf.tsx` — PDF-документ (A4 landscape).
-- `lib/xlsx/buildWorkbook.ts` — Excel (листы «Расчёт» и «План работ»).
+- `lib/pdf/ProposalPdf.tsx` — PDF-документ (A4 landscape) по референсу `sources/cp-development.pdf`:
+  обложка (фото + зелёный оверлей + белый логотип + Q-watermark), `HeaderBand` (зелёный градиент-
+  колонтитул с Q-watermark, `fixed`), слайды «Смета» → «Направления» → «О Qmedia», подвал.
+- `lib/xlsx/buildWorkbook.ts` — Excel (листы «Расчёт» и «План работ»). Зелёные шапки/секции,
+  жёлтый — только акцент на итоговой строке.
 - `app/api/proposals/...` — route handlers (CRUD, import, pdf, xlsx). Все: `runtime="nodejs"`,
   `dynamic="force-dynamic"`.
 - `components/` — визард (`Wizard`, `StepProject`, `StepDirections`, `StepReview`, `CostPanel`)
@@ -73,6 +77,12 @@ npx tsc --noEmit
   соседний.** Для больших чисел/заголовков ставить `lineHeight: 1` + `marginBottom`.
 - **Абсолютный элемент только с `right` схлопывает ширину** (текст не виден). Задавать
   `left` + `right` + `textAlign`.
+- **🛑 react-pdf ВЕШАЕТ раскладку (синхронный бесконечный цикл), если абсолютная `<Image>`
+  с отрицательным смещением / выходящая за край лежит прямо в `<Page>`.** Симптом: рендер
+  висит вечно, vitest не показывает даже таймаута теста (event loop заблокирован). Лечение:
+  оборачивать такие watermark-картинки в контейнер с `overflow:"hidden"` (см. обложку и
+  колонтитул `HeaderBand` в `ProposalPdf.tsx`). Диагностика — бисекция через esbuild-бандл
+  + `execFileSync(..., {timeout})` (vitest тут бесполезен — воркер виснет молча).
 - **`Buffer` → `Response`.** TS ругается на `BodyInit`; оборачивать в `new Uint8Array(buffer)`.
 - **Бутстрап.** Папка не пустая (`sources/`) — `create-next-app` откажется; проект собран
   конфигами вручную.
@@ -82,6 +92,10 @@ npx tsc --noEmit
 
 ## Конвенции
 
+- **Бренд green-forward.** Основной цвет — зелёный `#53BD35`, акцент — жёлтый `#FFDE00`
+  (сверены с CSS qmedia.by). Чёрный почти не используется (только тёмный текст). Палитра
+  в `BRAND` (`lib/company.ts`) и `tailwind.config.ts` зеркальны. Логотипы — `public/brand/logo-*.svg`
+  (в вебе SVG; в PDF — белые PNG, т.к. react-pdf не грузит SVG через `<Image>`).
 - **Общение с пользователем — только на русском** (техн. идентификаторы как есть).
 - Литералы значений в типах/конфиге совпадают со значениями Excel — чтобы выгрузка и расчёт
   были зеркальны исходнику. Не переименовывать без необходимости.

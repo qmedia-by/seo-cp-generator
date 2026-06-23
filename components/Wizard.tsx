@@ -88,7 +88,10 @@ export default function Wizard() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
-        <Link href="/" className="text-sm text-brand-gray hover:text-brand-black">
+        <Link
+          href="/"
+          className="text-sm text-brand-gray hover:text-brand-greenDark"
+        >
           ← К списку КП
         </Link>
         <Stepper step={step} onJump={setStep} />
@@ -166,9 +169,9 @@ function Stepper({
           <span
             className={`h-7 w-7 rounded-full grid place-items-center text-xs font-bold transition ${
               i === step
-                ? "bg-brand-yellow text-brand-black"
+                ? "bg-brand-green text-white ring-2 ring-brand-green/30"
                 : i < step
-                  ? "bg-brand-black text-white"
+                  ? "bg-brand-greenDark text-white"
                   : "bg-gray-200 text-brand-gray"
             }`}
           >

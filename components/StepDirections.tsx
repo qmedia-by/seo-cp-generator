@@ -99,7 +99,7 @@ export default function StepDirections({ directions, onChange }: Props) {
                       type="checkbox"
                       checked={checked.has(text)}
                       onChange={() => toggleWork(text)}
-                      className="mt-1 accent-brand-black shrink-0"
+                      className="mt-1 accent-brand-green shrink-0"
                     />
                     <span>{text}</span>
                   </label>

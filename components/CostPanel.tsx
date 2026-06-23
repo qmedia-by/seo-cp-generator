@@ -18,8 +18,8 @@ export default function CostPanel({
   );
 
   return (
-    <div className="rounded-2xl bg-brand-black text-white p-5 sticky top-6">
-      <div className="text-brand-yellow text-sm font-bold uppercase tracking-wide">
+    <div className="rounded-2xl bg-brand-gradient text-white p-5 sticky top-6 shadow-md">
+      <div className="text-white text-sm font-bold uppercase tracking-wide">
         Расчёт стоимости
       </div>
 
@@ -45,7 +45,7 @@ export default function CostPanel({
       <div className="border-t border-white/15 mt-3 pt-3 space-y-2">
         <Row label="В месяц" value={formatMoney(calc.monthlyTotalPrice)} sub={formatHours(calc.monthlyTotalHours)} />
         <Row label="Срок" value={pluralMonths(calc.durationMonths)} />
-        <div className="rounded-xl bg-brand-yellow text-brand-black px-4 py-3 mt-2">
+        <div className="rounded-xl bg-brand-yellow text-brand-ink px-4 py-3 mt-2">
           <div className="text-xs font-semibold uppercase opacity-70">
             Итого за {pluralMonths(calc.durationMonths)}
           </div>

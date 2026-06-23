@@ -19,27 +19,32 @@ import {
 } from "../seo-config";
 import type { Proposal } from "../types";
 
-const YELLOW = "FF" + BRAND.yellow.slice(1);
-const BLACK = "FF" + BRAND.black.slice(1);
-const LIGHT = "FFEEEEEE";
+// Фирстиль Qmedia: зелёный — основной (шапки/секции), жёлтый — акцент (итог).
+const argb = (hex: string) => "FF" + hex.slice(1);
+const GREEN = argb(BRAND.green);
+const GREEN_DARK = argb(BRAND.greenDark);
+const GREEN_TINT = argb(BRAND.greenTint);
+const YELLOW = argb(BRAND.yellow);
+const INK = argb(BRAND.ink);
+const WHITE = "FFFFFFFF";
 
 function titleCell(cell: ExcelJS.Cell, text: string) {
   cell.value = text;
-  cell.font = { bold: true, size: 14, color: { argb: BLACK } };
+  cell.font = { bold: true, size: 14, color: { argb: GREEN_DARK } };
 }
 
 function headerFill(cell: ExcelJS.Cell) {
-  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: YELLOW } };
-  cell.font = { bold: true, color: { argb: BLACK } };
+  cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: GREEN } };
+  cell.font = { bold: true, color: { argb: WHITE } };
 }
 
 function sectionRow(ws: ExcelJS.Worksheet, label: string) {
   const row = ws.addRow([label]);
-  row.font = { bold: true, color: { argb: BLACK } };
+  row.font = { bold: true, color: { argb: WHITE } };
   row.getCell(1).fill = {
     type: "pattern",
     pattern: "solid",
-    fgColor: { argb: LIGHT },
+    fgColor: { argb: GREEN_DARK },
   };
   return row;
 }
@@ -154,7 +159,7 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     calc.totalPrice,
     calc.totalHours,
   ]);
-  grandRow.font = { bold: true, size: 12, color: { argb: BLACK } };
+  grandRow.font = { bold: true, size: 12, color: { argb: INK } };
   grandRow.eachCell((c, col) => {
     if (col <= 5)
       c.fill = {
@@ -176,11 +181,15 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
       "",
       `${d.name} — ${d.included ? "включено" : "НЕ входит в продвижение"}`,
     ]);
-    head.getCell(2).font = { bold: true, size: 12, color: { argb: BLACK } };
+    head.getCell(2).font = {
+      bold: true,
+      size: 12,
+      color: { argb: d.included ? WHITE : INK },
+    };
     head.getCell(2).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: d.included ? YELLOW : LIGHT },
+      fgColor: { argb: d.included ? GREEN : "FFEDEDED" },
     };
     wp.addRow(["", d.goal]).getCell(2).font = {
       italic: true,

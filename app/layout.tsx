@@ -14,16 +14,20 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body>
-        <header className="bg-brand-black text-white">
-          <div className="max-w-6xl mx-auto px-4 h-14 flex items-center gap-3">
-            <a href="/" className="flex items-center gap-2">
-              <span className="grid place-items-center h-7 w-7 rounded-full bg-brand-yellow text-brand-black font-extrabold">
-                Q
-              </span>
-              <span className="font-bold">Qmedia</span>
+        <header className="bg-brand-gradient text-white shadow-sm">
+          <div className="max-w-6xl mx-auto px-4 h-16 flex items-center gap-3">
+            <a href="/" className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand/logo-white.svg"
+                alt="Qmedia"
+                className="h-7 w-auto"
+              />
             </a>
             <span className="text-white/40">·</span>
-            <span className="text-white/80 text-sm">Генератор КП по SEO</span>
+            <span className="text-white/90 text-sm font-medium">
+              Генератор КП по SEO
+            </span>
           </div>
         </header>
         <main className="min-h-[calc(100vh-3.5rem)]">{children}</main>

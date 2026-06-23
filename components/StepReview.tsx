@@ -158,7 +158,7 @@ export default function StepReview({
           type="button"
           onClick={onSave}
           disabled={saving || !input.siteName.trim()}
-          className="ui-btn-accent text-base px-6 py-3"
+          className="ui-btn-primary text-base px-6 py-3"
         >
           {saving ? "Сохранение…" : "Сохранить и сгенерировать КП"}
         </button>

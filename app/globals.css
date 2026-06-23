@@ -2,8 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Фирменный шрифт Qmedia (PT Sans с кириллицей). */
+@font-face {
+  font-family: "QmediaSans";
+  src: url("/fonts/QmediaSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "QmediaSans";
+  src: url("/fonts/QmediaSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --background: #f6f7f9;
+  --background: #f5fbf4;
   --foreground: #151515;
 }
 
@@ -16,7 +32,7 @@ body {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, system-ui, sans-serif;
+  font-family: "QmediaSans", Arial, Helvetica, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -26,18 +42,25 @@ body {
 
 @layer components {
   .ui-input {
-    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-black focus:ring-2 focus:ring-brand-yellow/40;
+    @apply w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-green focus:ring-2 focus:ring-brand-green/30;
   }
   .ui-btn {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
   }
+  /* Основное действие — фирменный зелёный. */
   .ui-btn-primary {
-    @apply ui-btn bg-brand-black text-white hover:bg-brand-ink;
+    @apply ui-btn bg-brand-green text-white hover:bg-brand-greenDark;
   }
+  /* Акцент — жёлтый (используется точечно). */
   .ui-btn-accent {
-    @apply ui-btn bg-brand-yellow text-brand-black hover:brightness-95;
+    @apply ui-btn bg-brand-yellow text-brand-ink hover:bg-brand-yellowDark;
   }
   .ui-btn-ghost {
-    @apply ui-btn border border-gray-300 bg-white hover:border-gray-400;
+    @apply ui-btn border border-gray-300 bg-white hover:border-brand-green hover:text-brand-greenDark;
+  }
+
+  /* Жёлтый хайлайт под текстом (как заголовки в референсном КП). */
+  .brand-mark {
+    @apply bg-brand-yellow text-brand-ink px-1.5 box-decoration-clone;
   }
 }

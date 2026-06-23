@@ -1,12 +1,19 @@
 // Данные компании и фирстиль Qmedia.
 // Всё, что может меняться (контакты, цвета, факты), собрано здесь.
 
+// Фирстиль Qmedia: основной цвет — зелёный (#53BD35), акцент — жёлтый (#FFDE00).
+// Чёрный почти не используется как фон/заливка (только тёмный текст). Значения
+// сверены с каноническим CSS qmedia.by.
 export const BRAND = {
-  yellow: "#FFDE00",
-  black: "#080808",
-  ink: "#151515",
-  green: "#53BD35",
-  greenDark: "#3D9A3A",
+  green: "#53BD35", // основной
+  greenDark: "#3D9A3A", // ховеры, тёмный край градиента
+  greenDeep: "#2F8E2A", // самый тёмный край градиента колонтитула
+  greenTint: "#E4F4DF", // светлая зелёная подложка
+  greenSoft: "#F5FBF4", // едва зелёный фон
+  yellow: "#FFDE00", // акцент (хайлайты, итоговая сумма)
+  yellowDark: "#E6C800", // ховер по жёлтому
+  black: "#080808", // используется редко
+  ink: "#151515", // основной текст
   gray: "#666666",
   mute: "#8D8D8D",
   white: "#FFFFFF",
@@ -29,15 +36,32 @@ export const COMPANY = {
   },
 } as const;
 
-/** Пути к ресурсам бренда (заполняются на шаге брендинга). */
+/**
+ * Ресурсы бренда.
+ * - SVG-логотипы (`/brand/logo-*.svg`) — для веб-интерфейса (вордмарк 469×150,
+ *   знак-кружок 150×150; цвета: white/green/black).
+ * - PNG белые логотипы — для PDF: @react-pdf/renderer не умеет грузить SVG
+ *   через <Image>, поэтому на зелёных подложках используем растровые белые.
+ */
 export const BRAND_ASSETS = {
-  /** Белый знак «Q» для тёмного фона. */
+  // Веб (public-пути для <img src>)
+  logoWordmark: "/brand/logo-white.svg",
+  logoWordmarkGreen: "/brand/logo-green.svg",
+  logoWordmarkBlack: "/brand/logo-black.svg",
+  logoMark: "/brand/logo-circle-white.svg",
+  logoMarkGreen: "/brand/logo-circle-green.svg",
+  // PDF (белые растровые для зелёного фона)
   qMarkWhite: "public/brand/qmedia-q-white.png",
-  /** Белый вордмарк для тёмного фона. */
   wordmarkWhite: "public/brand/qmedia-wordmark-white.png",
-  /** Шрифт с кириллицей для PDF (TTF). */
+  // Шрифт с кириллицей
   fontRegular: "public/fonts/QmediaSans-Regular.ttf",
   fontBold: "public/fonts/QmediaSans-Bold.ttf",
+} as const;
+
+/** Корпоративные фото (public-пути). Используются в PDF и на обложке. */
+export const PHOTOS = {
+  cover: "print-004.jpg", // переговорная с клиентом — для обложки КП
+  team: ["print-001.jpg", "print-003.jpg", "print-004.jpg", "print-012.jpg"],
 } as const;
 
 /** Преимущества работы с Qmedia (адаптировано из референса под SEO-КП). */

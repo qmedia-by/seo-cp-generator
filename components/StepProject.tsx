@@ -56,8 +56,8 @@ export default function StepProject({ input, meta, onInput, onMeta }: Props) {
                 onClick={() => onInput({ durationMonths: m as 3 | 6 })}
                 className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition ${
                   input.durationMonths === m
-                    ? "border-brand-black bg-brand-black text-white"
-                    : "border-gray-300 bg-white hover:border-gray-400"
+                    ? "border-brand-green bg-brand-green text-white"
+                    : "border-gray-300 bg-white hover:border-brand-green"
                 }`}
               >
                 {m} месяца
