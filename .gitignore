@@ -27,3 +27,7 @@ yarn-error.log*
 # env
 .env*.local
 .env
+
+# dev-окружение (Makefile)
+.dev-server.pid
+.dev-server.log

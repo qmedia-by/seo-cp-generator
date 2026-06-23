@@ -23,8 +23,17 @@ npx tsc --noEmit
 ```
 
 Хранилищу нужен Postgres: задать `DATABASE_URL` в `.env.local` (шаблон — `.env.example`).
-Локально проще всего поднять контейнер:
-`docker run -d -e POSTGRES_PASSWORD=test -e POSTGRES_DB=seocp -p 5432:5432 postgres:16-alpine`.
+Локально проще всего через `Makefile` (поднимает Postgres в Docker + dev-сервер):
+
+```bash
+make init      # зависимости + .env.local + контейнер Postgres (seocp-pg)
+make dev       # dev-сервер в foreground; make start — фоном; make stop/restart/status/logs
+```
+
+`make start` запускает `npm run dev` фоном с `nohup`, PID — в `.dev-server.pid` (gitignored),
+логи — `.dev-server.log`; `stop-dev` гасит дерево процессов по PID (через рекурсивный `pgrep`),
+`db-stop` делает `docker stop` (данные в томе `seocp-pgdata` сохраняются). Без Docker — обычный
+`docker run ... postgres:16-alpine` и ручной `DATABASE_URL`.
 
 ## Карта кода
 

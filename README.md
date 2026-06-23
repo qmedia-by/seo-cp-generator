@@ -23,7 +23,24 @@ Next.js 14 (App Router) · TypeScript · Tailwind CSS · `@react-pdf/renderer` (
 
 ## Запуск
 
-Требуется Node.js 18+.
+Требуется Node.js 18+. Хранилищу нужен Postgres — см. [Хранение данных](#хранение-данных).
+
+### Быстрый старт через Makefile
+
+Поднимает локальный Postgres в Docker и dev-сервер одной командой:
+
+```bash
+make init     # зависимости + .env.local + контейнер Postgres (один раз)
+make dev      # dev-сервер в foreground (live-логи, Ctrl+C — выход)
+# либо фоном, чтобы потом управлять:
+make start    # БД + dev-сервер в фоне (логи: make logs)
+make restart  # перезапустить окружение
+make stop     # остановить dev-сервер и БД (данные сохраняются)
+make status   # что сейчас запущено
+make help     # все команды
+```
+
+### Вручную (npm)
 
 ```bash
 npm install
