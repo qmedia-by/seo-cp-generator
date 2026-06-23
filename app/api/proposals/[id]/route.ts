@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const proposal = await getProposal(params.id);
+  const { id } = await params;
+  const proposal = await getProposal(id);
   if (!proposal) {
     return NextResponse.json({ error: "КП не найдено" }, { status: 404 });
   }
@@ -17,9 +18,10 @@ export async function GET(
 
 export async function DELETE(
   _req: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const ok = await deleteProposal(params.id);
+  const { id } = await params;
+  const ok = await deleteProposal(id);
   if (!ok) {
     return NextResponse.json({ error: "КП не найдено" }, { status: 404 });
   }
