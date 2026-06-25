@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculate, directionMonthlyPrice } from "../lib/calc";
+import { calculate, directionMonthlyPrice, priceToHours } from "../lib/calc";
 import { DIRECTION_ORDER } from "../lib/seo-config";
 import type { DirectionKey, ProposalInput } from "../lib/types";
 
@@ -20,11 +20,12 @@ const goldenInput: ProposalInput = {
 
 const allIncluded = DIRECTION_ORDER.map((key) => ({ key, included: true }));
 
-describe("calculate — золотой тест из Расчет SEO.xlsx", () => {
+describe("calculate — золотой тест из Расчет SEO.xlsx (полные цены до скидок)", () => {
   const res = calculate(goldenInput, allIncluded);
   const byKey = Object.fromEntries(res.perDirection.map((d) => [d.key, d]));
 
-  const expected: Record<DirectionKey, { price: number; hours: number }> = {
+  // Эталон Excel — это ПОЛНЫЕ цены направлений (без пакетной скидки).
+  const expectedFull: Record<DirectionKey, { price: number; hours: number }> = {
     commercial: { price: 1525, hours: 20 },
     info: { price: 1155, hours: 15 },
     geo: { price: 1307, hours: 17 },
@@ -33,20 +34,77 @@ describe("calculate — золотой тест из Расчет SEO.xlsx", () 
   };
 
   for (const key of DIRECTION_ORDER) {
-    it(`${key}: ${expected[key].price} BYN / ${expected[key].hours} ч`, () => {
-      expect(byKey[key].monthlyPrice).toBe(expected[key].price);
-      expect(byKey[key].monthlyHours).toBe(expected[key].hours);
+    it(`${key}: полная цена ${expectedFull[key].price} BYN / ${expectedFull[key].hours} ч`, () => {
+      expect(byKey[key].fullMonthlyPrice).toBe(expectedFull[key].price);
+      // directionMonthlyPrice не знает о пакетных скидках — это «чистый» Excel.
+      expect(directionMonthlyPrice(key, goldenInput, true)).toBe(
+        expectedFull[key].price,
+      );
+      expect(priceToHours(expectedFull[key].price)).toBe(expectedFull[key].hours);
     });
   }
 
-  it("итог за месяц: 5352 BYN / 70 ч", () => {
-    expect(res.monthlyTotalPrice).toBe(5352);
-    expect(res.monthlyTotalHours).toBe(70);
+  it("сумма полных цен за месяц: 5352 BYN", () => {
+    expect(res.monthlyTotalFullPrice).toBe(5352);
+  });
+});
+
+describe("calculate — пакетная скидка при Коммерческом SEO", () => {
+  const res = calculate(goldenInput, allIncluded);
+  const byKey = Object.fromEntries(res.perDirection.map((d) => [d.key, d]));
+
+  it("GEO и SERM получают −30% при включённом Коммерческом", () => {
+    expect(byKey.geo.discountRate).toBe(0.3);
+    expect(byKey.serm.discountRate).toBe(0.3);
+    expect(byKey.geo.monthlyPrice).toBe(915); // round(1307 × 0.7)
+    expect(byKey.serm.monthlyPrice).toBe(578); // round(825 × 0.7)
+    expect(byKey.geo.monthlyHours).toBe(12); // round(915 / 75)
+    expect(byKey.serm.monthlyHours).toBe(8); // round(578 / 75)
   });
 
-  it("итог за срок (3 мес) = месячный × 3", () => {
-    expect(res.totalPrice).toBe(5352 * 3);
-    expect(res.totalHours).toBe(70 * 3);
+  it("Коммерческое / Информационное / Техподдержка — без скидки", () => {
+    expect(byKey.commercial.discountRate).toBe(0);
+    expect(byKey.info.discountRate).toBe(0);
+    expect(byKey.support.discountRate).toBe(0);
+    expect(byKey.commercial.monthlyPrice).toBe(1525);
+    expect(byKey.info.monthlyPrice).toBe(1155);
+    expect(byKey.support.monthlyPrice).toBe(540);
+  });
+
+  it("итог за месяц со скидкой: 4713 BYN / 62 ч, скидка 639 BYN", () => {
+    expect(res.monthlyTotalPrice).toBe(4713);
+    expect(res.monthlyTotalHours).toBe(62);
+    expect(res.monthlyTotalFullPrice).toBe(5352);
+    expect(res.monthlyDiscount).toBe(639);
+    expect(res.totalPrice).toBe(4713 * 3);
+    expect(res.totalHours).toBe(62 * 3);
+  });
+
+  it("без Коммерческого SEO скидки нет — GEO/SERM по полной цене", () => {
+    const noCommercial = DIRECTION_ORDER.map((key) => ({
+      key,
+      included: key !== "commercial",
+    }));
+    const r = calculate(goldenInput, noCommercial);
+    const bk = Object.fromEntries(r.perDirection.map((d) => [d.key, d]));
+    expect(bk.geo.discountRate).toBe(0);
+    expect(bk.geo.monthlyPrice).toBe(1307);
+    expect(bk.serm.monthlyPrice).toBe(825);
+    expect(r.monthlyDiscount).toBe(0);
+  });
+
+  it("скидка применяется только к включённым GEO/SERM", () => {
+    // Коммерческое включено, GEO выключено, SERM включён.
+    const sel = DIRECTION_ORDER.map((key) => ({
+      key,
+      included: key === "commercial" || key === "serm",
+    }));
+    const r = calculate(goldenInput, sel);
+    const bk = Object.fromEntries(r.perDirection.map((d) => [d.key, d]));
+    expect(bk.serm.discountRate).toBe(0.3);
+    expect(bk.serm.monthlyPrice).toBe(578);
+    expect(bk.geo.discountRate).toBe(0); // выключен → скидки нет
+    expect(bk.geo.monthlyPrice).toBe(0);
   });
 });
 
@@ -69,7 +127,7 @@ describe("calculate — выключенные направления", () => {
 
   it("при 6 мес итог удваивается относительно 3 мес", () => {
     const res6 = calculate({ ...goldenInput, durationMonths: 6 }, allIncluded);
-    expect(res6.totalPrice).toBe(5352 * 6);
+    expect(res6.totalPrice).toBe(4713 * 6);
   });
 });
 

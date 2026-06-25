@@ -3,6 +3,7 @@
 import {
   AUDIENCE_COEF,
   BASE_COST,
+  COMMERCIAL_BUNDLE,
   COMPETITION_COEF,
   CURRENCY,
   DIRECTION_COEF,
@@ -67,6 +68,10 @@ export function priceToHours(price: number): number {
  * Полный расчёт по введённым параметрам и набору включённых направлений.
  * `directions` — любой массив объектов с полями key/included (DirectionSelection подходит).
  * Итог за месяц = сумма по включённым; итог за срок = месячный × durationMonths.
+ *
+ * Пакетная скидка (COMMERCIAL_BUNDLE): если включено направление-триггер
+ * (Коммерческое SEO), включённые GEO и SERM считаются со скидкой 30%. Часы
+ * следуют из цены со скидкой (как и везде в модели: часы = round(цена / ставка)).
  */
 export function calculate(
   input: ProposalInput,
@@ -76,13 +81,25 @@ export function calculate(
     directions.map((d) => [d.key, d.included]),
   );
 
+  const bundleActive = includedByKey.get(COMMERCIAL_BUNDLE.trigger) ?? false;
+
   const perDirection: DirectionCalc[] = DIRECTION_ORDER.map((key) => {
     const included = includedByKey.get(key) ?? false;
-    const monthlyPrice = directionMonthlyPrice(key, input, included);
+    const fullMonthlyPrice = directionMonthlyPrice(key, input, included);
+    const discountRate =
+      included && bundleActive && COMMERCIAL_BUNDLE.discounted.includes(key)
+        ? COMMERCIAL_BUNDLE.rate
+        : 0;
+    const monthlyPrice =
+      discountRate > 0
+        ? Math.round(fullMonthlyPrice * (1 - discountRate))
+        : fullMonthlyPrice;
     return {
       key,
       name: DIRECTION_NAME[key],
       included,
+      fullMonthlyPrice,
+      discountRate,
       monthlyPrice,
       monthlyHours: included ? priceToHours(monthlyPrice) : 0,
     };
@@ -90,6 +107,10 @@ export function calculate(
 
   const monthlyTotalPrice = perDirection.reduce(
     (sum, d) => sum + d.monthlyPrice,
+    0,
+  );
+  const monthlyTotalFullPrice = perDirection.reduce(
+    (sum, d) => sum + d.fullMonthlyPrice,
     0,
   );
   const monthlyTotalHours = perDirection.reduce(
@@ -103,6 +124,8 @@ export function calculate(
     perDirection,
     monthlyTotalPrice,
     monthlyTotalHours,
+    monthlyTotalFullPrice,
+    monthlyDiscount: monthlyTotalFullPrice - monthlyTotalPrice,
     totalPrice: monthlyTotalPrice * input.durationMonths,
     totalHours: monthlyTotalHours * input.durationMonths,
   };

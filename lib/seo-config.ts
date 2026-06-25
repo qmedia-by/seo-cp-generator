@@ -77,6 +77,21 @@ export const DIRECTION_COEFFICIENTS: Record<DirectionKey, CoefficientKey[]> = {
   support: ["pages", "errors", "experience"],
 };
 
+/**
+ * Пакетная скидка. Если включено направление-триггер (Коммерческое SEO), то
+ * перечисленные направления (GEO, SERM) идут со скидкой `rate` (доля 0..1).
+ * Скидка показывается клиенту в КП/Excel. Нет в исходном Excel — правится здесь.
+ */
+export const COMMERCIAL_BUNDLE: {
+  trigger: DirectionKey;
+  discounted: DirectionKey[];
+  rate: number;
+} = {
+  trigger: "commercial",
+  discounted: ["geo", "serm"],
+  rate: 0.3,
+};
+
 // --- Таблицы коэффициентов (VLOOKUP-таблицы из Excel) ---
 
 export const REGION_COEF: Record<Region, number> = {

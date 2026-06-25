@@ -147,6 +147,9 @@ const s = StyleSheet.create({
   cStatus: { width: "20%" },
   cHours: { width: "16%", textAlign: "right" },
   cPrice: { width: "18%", textAlign: "right" },
+  cPriceWrap: { width: "18%", paddingVertical: 6, paddingHorizontal: 8, alignItems: "flex-end" },
+  cPriceFinal: { fontSize: 9.5 },
+  cPriceStrike: { fontSize: 8, color: BRAND.gray, textDecoration: "line-through" },
 
   badgeOn: { color: BRAND.greenDark, fontWeight: 700 },
   badgeOff: { color: BRAND.mute },
@@ -163,6 +166,7 @@ const s = StyleSheet.create({
   dirBadgeOff: { backgroundColor: "#E7E7E7", color: BRAND.gray, fontSize: 8, fontWeight: 700, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 8, textTransform: "uppercase" },
   dirPrice: { fontSize: 9, color: BRAND.gray, marginBottom: 5 },
   dirPriceStrong: { color: BRAND.greenDark, fontWeight: 700 },
+  dirPriceStrike: { color: BRAND.gray, textDecoration: "line-through" },
   work: { flexDirection: "row", marginBottom: 2.5 },
   workBullet: { width: 10, color: BRAND.green, fontWeight: 700 },
   workText: { flex: 1, fontSize: 9.5 },
@@ -324,6 +328,22 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
               <View style={s.costHighlight}>
                 <Text style={s.costHighlightText}>{formatMoney(calc.totalPrice)}</Text>
               </View>
+              {calc.monthlyDiscount > 0 && (
+                <>
+                  <View style={s.costLine}>
+                    <Text style={s.costLineLabel}>Стоимость в месяц без скидки</Text>
+                    <Text style={[s.costLineValue, s.dirPriceStrike]}>
+                      {formatMoney(calc.monthlyTotalFullPrice)}
+                    </Text>
+                  </View>
+                  <View style={s.costLine}>
+                    <Text style={s.costLineLabel}>Скидка (Коммерческое SEO)</Text>
+                    <Text style={[s.costLineValue, { color: BRAND.greenDark }]}>
+                      −{formatMoney(calc.monthlyDiscount)}
+                    </Text>
+                  </View>
+                </>
+              )}
               <View style={s.costLine}>
                 <Text style={s.costLineLabel}>Стоимость в месяц</Text>
                 <Text style={s.costLineValue}>{formatMoney(calc.monthlyTotalPrice)}</Text>
@@ -356,14 +376,29 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
           <View key={d.key} style={s.tRow} wrap={false}>
             <Text style={[s.tCell, s.cName, d.included ? {} : s.muted]}>{d.name}</Text>
             <Text style={[s.tCell, s.cStatus, d.included ? s.badgeOn : s.badgeOff]}>
-              {d.included ? "включено" : "не входит"}
+              {d.included
+                ? d.discountRate > 0
+                  ? `включено · −${Math.round(d.discountRate * 100)}%`
+                  : "включено"
+                : "не входит"}
             </Text>
             <Text style={[s.tCell, s.cHours, d.included ? {} : s.muted]}>
               {d.included ? formatHours(d.monthlyHours) : "—"}
             </Text>
-            <Text style={[s.tCell, s.cPrice, d.included ? {} : s.muted]}>
-              {d.included ? formatMoney(d.monthlyPrice) : "—"}
-            </Text>
+            <View style={s.cPriceWrap}>
+              {d.included ? (
+                <>
+                  {d.discountRate > 0 && (
+                    <Text style={s.cPriceStrike}>
+                      {formatMoney(d.fullMonthlyPrice)}
+                    </Text>
+                  )}
+                  <Text style={s.cPriceFinal}>{formatMoney(d.monthlyPrice)}</Text>
+                </>
+              ) : (
+                <Text style={[s.cPriceFinal, s.muted]}>—</Text>
+              )}
+            </View>
           </View>
         ))}
         <View style={s.tTotal} wrap={false}>
@@ -397,7 +432,15 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
                 <>
                   <Text style={s.dirPrice}>
                     Стоимость:{" "}
-                    <Text style={s.dirPriceStrong}>{formatMoney(c.monthlyPrice)}/мес</Text>{" "}
+                    {c.discountRate > 0 && (
+                      <Text style={s.dirPriceStrike}>
+                        {formatMoney(c.fullMonthlyPrice)}{" "}
+                      </Text>
+                    )}
+                    <Text style={s.dirPriceStrong}>{formatMoney(c.monthlyPrice)}/мес</Text>
+                    {c.discountRate > 0
+                      ? ` (−${Math.round(c.discountRate * 100)}% за Коммерческое SEO)`
+                      : ""}{" "}
                     · {formatHours(c.monthlyHours)}/мес
                   </Text>
                   {d.works.map((w, i) => (

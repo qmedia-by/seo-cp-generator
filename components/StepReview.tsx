@@ -98,9 +98,19 @@ export default function StepReview({
                 <div className="text-right whitespace-nowrap">
                   {d.included ? (
                     <>
+                      {c.discountRate > 0 && (
+                        <span className="text-brand-gray line-through text-xs mr-2">
+                          {formatMoney(c.fullMonthlyPrice)}
+                        </span>
+                      )}
                       <span className="font-semibold">
                         {formatMoney(c.monthlyPrice)}
                       </span>
+                      {c.discountRate > 0 && (
+                        <span className="ml-1.5 rounded bg-brand-yellow px-1.5 py-0.5 text-[10px] font-bold text-brand-ink align-middle">
+                          −{Math.round(c.discountRate * 100)}%
+                        </span>
+                      )}
                       <span className="text-brand-gray text-xs ml-2">
                         {formatHours(c.monthlyHours)}/мес
                       </span>

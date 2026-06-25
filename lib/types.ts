@@ -90,9 +90,13 @@ export interface DirectionCalc {
   key: DirectionKey;
   name: string;
   included: boolean;
-  /** Стоимость за месяц (BYN). 0 — если направление выключено. */
+  /** Полная стоимость за месяц до скидки (BYN). 0 — если выключено. */
+  fullMonthlyPrice: number;
+  /** Доля пакетной скидки 0..1 (например 0.3). 0 — скидки нет. */
+  discountRate: number;
+  /** Итоговая стоимость за месяц со скидкой (BYN). 0 — если выключено. */
   monthlyPrice: number;
-  /** Часов в месяц. */
+  /** Часов в месяц (по итоговой цене со скидкой). */
   monthlyHours: number;
 }
 
@@ -101,9 +105,13 @@ export interface CalcResult {
   currency: string;
   durationMonths: DurationMonths;
   perDirection: DirectionCalc[];
-  /** Итог за месяц по включённым направлениям. */
+  /** Итог за месяц по включённым направлениям (со скидками). */
   monthlyTotalPrice: number;
   monthlyTotalHours: number;
+  /** Итог за месяц без учёта скидок (для показа экономии). */
+  monthlyTotalFullPrice: number;
+  /** Сумма скидки за месяц = monthlyTotalFullPrice − monthlyTotalPrice. */
+  monthlyDiscount: number;
   /** Итог за весь срок = месячный × durationMonths. */
   totalPrice: number;
   totalHours: number;

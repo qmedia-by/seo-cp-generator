@@ -63,11 +63,13 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     views: [{ state: "frozen", ySplit: 0 }],
   });
   ws.columns = [
-    { width: 34 },
-    { width: 22 },
-    { width: 16 },
-    { width: 14 },
-    { width: 12 },
+    { width: 34 }, // Направление / Параметр
+    { width: 20 }, // Статус / Значение
+    { width: 14 }, // Коэф. напр. / Коэффициент
+    { width: 16 }, // Полная цена/мес
+    { width: 14 }, // Скидка/мес
+    { width: 16 }, // Цена/мес
+    { width: 12 }, // Часов/мес
   ];
 
   titleCell(ws.getCell("A1"), "Коммерческое предложение по SEO");
@@ -119,22 +121,31 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     "Направление",
     "Статус",
     "Коэф. напр.",
+    "Полная цена/мес",
+    "Скидка/мес",
     "Цена/мес",
     "Часов/мес",
   ]);
   estHeader.eachCell((c, col) => {
-    if (col <= 5) headerFill(c);
+    if (col <= 7) headerFill(c);
   });
 
   for (const d of calc.perDirection) {
+    const discount = d.included ? d.monthlyPrice - d.fullMonthlyPrice : 0; // ≤ 0
     const row = ws.addRow([
-      d.name,
+      d.discountRate > 0
+        ? `${d.name} (−${Math.round(d.discountRate * 100)}%)`
+        : d.name,
       d.included ? "включено" : "не входит",
       DIRECTION_COEF[d.key],
+      d.included ? d.fullMonthlyPrice : 0,
+      discount,
       d.included ? d.monthlyPrice : 0,
       d.included ? d.monthlyHours : 0,
     ]);
     row.getCell(4).numFmt = money;
+    row.getCell(5).numFmt = money;
+    row.getCell(6).numFmt = money;
     if (!d.included) row.font = { color: { argb: "FF999999" } };
   }
 
@@ -142,26 +153,34 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     "Итого за месяц",
     "",
     "",
+    calc.monthlyTotalFullPrice,
+    -calc.monthlyDiscount,
     calc.monthlyTotalPrice,
     calc.monthlyTotalHours,
   ]);
   totalRow.font = { bold: true };
   totalRow.getCell(4).numFmt = money;
+  totalRow.getCell(5).numFmt = money;
+  totalRow.getCell(6).numFmt = money;
 
   ws.addRow([]);
   const durRow = ws.addRow(["Срок продвижения", `${input.durationMonths} мес`]);
   durRow.font = { bold: true };
 
+  const fullTermPrice = calc.monthlyTotalFullPrice * input.durationMonths;
+  const termDiscount = calc.monthlyDiscount * input.durationMonths;
   const grandRow = ws.addRow([
     `Итого за ${input.durationMonths} мес`,
     "",
     "",
+    fullTermPrice,
+    -termDiscount,
     calc.totalPrice,
     calc.totalHours,
   ]);
   grandRow.font = { bold: true, size: 12, color: { argb: INK } };
   grandRow.eachCell((c, col) => {
-    if (col <= 5)
+    if (col <= 7)
       c.fill = {
         type: "pattern",
         pattern: "solid",
@@ -169,6 +188,8 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
       };
   });
   grandRow.getCell(4).numFmt = money;
+  grandRow.getCell(5).numFmt = money;
+  grandRow.getCell(6).numFmt = money;
 
   // --- Лист 2: План работ ---
   const wp = wb.addWorksheet("План работ");

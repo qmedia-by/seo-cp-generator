@@ -28,14 +28,34 @@ export default function CostPanel({
           {calc.perDirection.map((d) => (
             <tr
               key={d.key}
-              className={d.included ? "" : "text-white/35 line-through"}
+              className={d.included ? "align-top" : "text-white/35 line-through"}
             >
-              <td className="py-1.5 pr-2 align-top">{d.name}</td>
-              <td className="py-1.5 px-2 text-right whitespace-nowrap text-white/60">
+              <td className="py-1.5 pr-2 align-top">
+                {d.name}
+                {d.discountRate > 0 && (
+                  <span className="block text-[10px] font-semibold text-brand-yellow leading-tight">
+                    −{Math.round(d.discountRate * 100)}% за коммерческое SEO
+                  </span>
+                )}
+              </td>
+              <td className="py-1.5 px-2 text-right whitespace-nowrap text-white/60 align-top">
                 {d.included ? formatHours(d.monthlyHours) : "—"}
               </td>
-              <td className="py-1.5 pl-2 text-right whitespace-nowrap font-medium">
-                {d.included ? formatMoney(d.monthlyPrice) : "—"}
+              <td className="py-1.5 pl-2 text-right whitespace-nowrap font-medium align-top">
+                {d.included ? (
+                  d.discountRate > 0 ? (
+                    <span className="inline-flex flex-col items-end leading-tight">
+                      <span className="text-white/40 line-through text-xs">
+                        {formatMoney(d.fullMonthlyPrice)}
+                      </span>
+                      <span>{formatMoney(d.monthlyPrice)}</span>
+                    </span>
+                  ) : (
+                    formatMoney(d.monthlyPrice)
+                  )
+                ) : (
+                  "—"
+                )}
               </td>
             </tr>
           ))}
@@ -43,6 +63,20 @@ export default function CostPanel({
       </table>
 
       <div className="border-t border-white/15 mt-3 pt-3 space-y-2">
+        {calc.monthlyDiscount > 0 && (
+          <>
+            <Row
+              label="Без скидки"
+              value={formatMoney(calc.monthlyTotalFullPrice)}
+            />
+            <div className="flex items-baseline justify-between text-brand-yellow">
+              <span className="text-sm">Скидка в месяц</span>
+              <span className="font-semibold">
+                −{formatMoney(calc.monthlyDiscount)}
+              </span>
+            </div>
+          </>
+        )}
         <Row label="В месяц" value={formatMoney(calc.monthlyTotalPrice)} sub={formatHours(calc.monthlyTotalHours)} />
         <Row label="Срок" value={pluralMonths(calc.durationMonths)} />
         <div className="rounded-xl bg-brand-yellow text-brand-ink px-4 py-3 mt-2">
