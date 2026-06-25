@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { calculate, directionMonthlyPrice, priceToHours } from "../lib/calc";
+import {
+  calculate,
+  calculateSchedule,
+  directionMonthlyPrice,
+  normalizeActiveMonths,
+  priceToHours,
+} from "../lib/calc";
+import { formatMonthRanges } from "../lib/format";
 import { DIRECTION_ORDER } from "../lib/seo-config";
 import type { DirectionKey, ProposalInput } from "../lib/types";
 
@@ -128,6 +135,87 @@ describe("calculate — выключенные направления", () => {
   it("при 6 мес итог удваивается относительно 3 мес", () => {
     const res6 = calculate({ ...goldenInput, durationMonths: 6 }, allIncluded);
     expect(res6.totalPrice).toBe(4713 * 6);
+  });
+});
+
+describe("calculateSchedule — помесячный набор направлений", () => {
+  const input6: ProposalInput = { ...goldenInput, durationMonths: 6 };
+  const allActive = DIRECTION_ORDER.map((key) => ({
+    key,
+    activeMonths: [1, 2, 3, 4, 5, 6],
+  }));
+
+  it("равномерный набор: итог = месячный × срок (как старая логика)", () => {
+    const res = calculateSchedule(input6, allActive);
+    expect(res.months).toHaveLength(6);
+    expect(res.totalPrice).toBe(4713 * 6);
+    expect(res.totalHours).toBe(62 * 6);
+    expect(res.totalFullPrice).toBe(5352 * 6);
+    expect(res.totalDiscount).toBe(639 * 6);
+    res.months.forEach((m) => expect(m.monthlyTotalPrice).toBe(4713));
+  });
+
+  it("SERM только в первые 2 месяца — учитывается лишь в них", () => {
+    const dirs = DIRECTION_ORDER.map((key) => ({
+      key,
+      activeMonths: key === "serm" ? [1, 2] : [1, 2, 3, 4, 5, 6],
+    }));
+    const res = calculateSchedule(input6, dirs);
+    const serm = res.perDirection.find((d) => d.key === "serm")!;
+    expect(serm.activeMonths).toEqual([1, 2]);
+    expect(serm.monthsLabel).toBe("мес. 1–2");
+    // SERM со скидкой (Коммерческое активно) = 578/мес × 2 = 1156.
+    expect(serm.totalPrice).toBe(578 * 2);
+    // Месяцы 1–2 — полный набор (4713), месяцы 3–6 — без SERM (4713 − 578).
+    expect(res.months[0].monthlyTotalPrice).toBe(4713);
+    expect(res.months[2].monthlyTotalPrice).toBe(4713 - 578);
+    expect(res.totalPrice).toBe(4713 * 2 + (4713 - 578) * 4);
+  });
+
+  it("скидка помесячна: GEO со скидкой только там, где активно Коммерческое", () => {
+    const dirs = [
+      { key: "commercial" as const, activeMonths: [1, 2] },
+      { key: "geo" as const, activeMonths: [1, 2, 3, 4, 5, 6] },
+    ];
+    const res = calculateSchedule(input6, dirs);
+    const geo = res.perDirection.find((d) => d.key === "geo")!;
+    // Мес. 1–2 — скидка (915), мес. 3–6 — полная (1307).
+    expect(res.months[0].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(915);
+    expect(res.months[2].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(1307);
+    expect(geo.totalPrice).toBe(915 * 2 + 1307 * 4);
+    expect(geo.totalFullPrice).toBe(1307 * 6);
+  });
+
+  it("обратная совместимость: старый included → все месяцы", () => {
+    const dirs = DIRECTION_ORDER.map((key) => ({ key, included: true }));
+    const res = calculateSchedule(input6, dirs);
+    expect(res.totalPrice).toBe(4713 * 6);
+    res.perDirection.forEach((d) =>
+      expect(d.activeMonths).toEqual([1, 2, 3, 4, 5, 6]),
+    );
+  });
+});
+
+describe("normalizeActiveMonths", () => {
+  it("из старого included", () => {
+    expect(normalizeActiveMonths({ included: true }, 3)).toEqual([1, 2, 3]);
+    expect(normalizeActiveMonths({ included: false }, 3)).toEqual([]);
+    expect(normalizeActiveMonths({}, 3)).toEqual([]);
+  });
+  it("обрезает по сроку и сортирует уникальные", () => {
+    expect(normalizeActiveMonths({ activeMonths: [3, 1, 7, 1] }, 6)).toEqual([
+      1, 3,
+    ]);
+  });
+});
+
+describe("formatMonthRanges", () => {
+  it("сворачивает в диапазоны", () => {
+    expect(formatMonthRanges([], 6)).toBe("—");
+    expect(formatMonthRanges([1, 2, 3, 4, 5, 6], 6)).toBe("все 6 месяцев");
+    expect(formatMonthRanges([1, 2], 6)).toBe("мес. 1–2");
+    expect(formatMonthRanges([1, 3, 5], 6)).toBe("мес. 1, 3, 5");
+    expect(formatMonthRanges([1, 2, 4, 5, 6], 6)).toBe("мес. 1–2, 4–6");
   });
 });
 

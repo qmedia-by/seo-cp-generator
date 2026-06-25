@@ -68,13 +68,17 @@ export interface WorkItem {
   custom?: boolean;
 }
 
-/** Выбор по направлению: включено ли и какие работы оставлены. */
+/** Выбор по направлению: в какие месяцы активно и какие работы оставлены. */
 export interface DirectionSelection {
   key: DirectionKey;
   name: string;
   /** Подзаголовок-цель (курсивная строка из разбивки работ). */
   goal: string;
-  included: boolean;
+  /**
+   * Номера месяцев (1-based), в которые направление активно. `[]` — не входит.
+   * Производное «включено» = `activeMonths.length > 0`.
+   */
+  activeMonths: number[];
   works: WorkItem[];
 }
 
@@ -100,7 +104,7 @@ export interface DirectionCalc {
   monthlyHours: number;
 }
 
-/** Полный результат расчёта. */
+/** Полный результат расчёта одного месяца. */
 export interface CalcResult {
   currency: string;
   durationMonths: DurationMonths;
@@ -117,6 +121,51 @@ export interface CalcResult {
   totalHours: number;
 }
 
+/** Расчёт одного месяца внутри помесячного графика. */
+export interface MonthBreakdown {
+  /** Номер месяца, 1-based. */
+  month: number;
+  /** Состояние всех направлений в этом месяце (включая выключенные). */
+  perDirection: DirectionCalc[];
+  monthlyTotalPrice: number;
+  monthlyTotalHours: number;
+  monthlyTotalFullPrice: number;
+  monthlyDiscount: number;
+}
+
+/** Итог по одному направлению за весь срок (сумма по активным месяцам). */
+export interface DirectionScheduleCalc {
+  key: DirectionKey;
+  name: string;
+  /** Месяцы (1-based), в которые направление активно. */
+  activeMonths: number[];
+  /** Человекочитаемая подпись: «все 6 месяцев» / «мес. 1–2» / «—». */
+  monthsLabel: string;
+  /** Стоимость за срок (сумма monthlyPrice по активным месяцам, со скидками). */
+  totalPrice: number;
+  /** Полная стоимость за срок до скидок. */
+  totalFullPrice: number;
+  /** Часы за срок. */
+  totalHours: number;
+}
+
+/** Полный результат расчёта с учётом помесячного графика. */
+export interface ScheduleResult {
+  currency: string;
+  durationMonths: DurationMonths;
+  /** Помесячная разбивка (длина = durationMonths). */
+  months: MonthBreakdown[];
+  /** Итоги по направлениям за срок (для матрицы и пометок). */
+  perDirection: DirectionScheduleCalc[];
+  /** Итог за весь срок (сумма помесячных итогов). */
+  totalPrice: number;
+  totalHours: number;
+  /** Полная стоимость за срок без скидок. */
+  totalFullPrice: number;
+  /** Сумма скидки за срок = totalFullPrice − totalPrice. */
+  totalDiscount: number;
+}
+
 /** Сохраняемое на сервере коммерческое предложение. */
 export interface Proposal {
   id: string;
@@ -125,5 +174,5 @@ export interface Proposal {
   directions: DirectionSelection[];
   meta?: ProposalMeta;
   /** Снимок расчёта на момент сохранения (для истории). */
-  calcSnapshot: CalcResult;
+  calcSnapshot: ScheduleResult;
 }

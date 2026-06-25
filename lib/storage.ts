@@ -1,21 +1,30 @@
 // Хранилище КП в Postgres (Neon/Supabase): таблица proposals(id, created_at, data jsonb).
 
-import { calculate } from "./calc";
+import { calculateSchedule, normalizeActiveMonths } from "./calc";
 import { ensureSchema, getPool } from "./db";
 import type { CreateProposalPayload } from "./validation";
-import type { Proposal } from "./types";
+import type { DirectionSelection, Proposal } from "./types";
 
 /** id состоит только из hex/дефисов (как у crypto.randomUUID). Некорректный → «не найдено». */
 const ID_RE = /^[a-f0-9-]{8,64}$/i;
 
 /** Собрать Proposal из входных данных: посчитать снимок расчёта, выдать id и дату. */
 export function buildProposal(payload: CreateProposalPayload): Proposal {
-  const calcSnapshot = calculate(payload.input, payload.directions);
+  // Нормализуем направления в новый формат (activeMonths) — в т.ч. из старого
+  // `included` при импорте ранее сохранённого JSON.
+  const directions: DirectionSelection[] = payload.directions.map((d) => ({
+    key: d.key,
+    name: d.name,
+    goal: d.goal,
+    activeMonths: normalizeActiveMonths(d, payload.input.durationMonths),
+    works: d.works,
+  }));
+  const calcSnapshot = calculateSchedule(payload.input, directions);
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     input: payload.input,
-    directions: payload.directions,
+    directions,
     meta: payload.meta,
     calcSnapshot,
   };
@@ -63,16 +72,21 @@ export interface ProposalSummary {
 }
 
 function toSummary(p: Proposal): ProposalSummary {
+  const duration = p.input.durationMonths;
+  const totalPrice = p.calcSnapshot.totalPrice;
   return {
     id: p.id,
     createdAt: p.createdAt,
     siteName: p.input.siteName,
     region: p.input.region,
-    durationMonths: p.input.durationMonths,
-    monthlyTotalPrice: p.calcSnapshot.monthlyTotalPrice,
-    totalPrice: p.calcSnapshot.totalPrice,
+    durationMonths: duration,
+    // Помесячная стоимость варьируется — в карточке списка показываем среднюю.
+    monthlyTotalPrice: duration > 0 ? Math.round(totalPrice / duration) : 0,
+    totalPrice,
     currency: p.calcSnapshot.currency,
-    includedCount: p.directions.filter((d) => d.included).length,
+    includedCount: p.directions.filter(
+      (d) => normalizeActiveMonths(d, duration).length > 0,
+    ).length,
   };
 }
 

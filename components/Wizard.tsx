@@ -26,14 +26,39 @@ const DEFAULT_INPUT: ProposalInput = {
   competition: "Средняя",
 };
 
+function allMonths(n: number): number[] {
+  return Array.from({ length: n }, (_, i) => i + 1);
+}
+
 function initDirections(): DirectionSelection[] {
   return WORKS_CATALOG.map((d) => ({
     key: d.key,
     name: d.name,
     goal: d.goal,
-    included: true,
+    // По умолчанию направление активно во все месяцы срока.
+    activeMonths: allMonths(DEFAULT_INPUT.durationMonths),
     works: d.works.map((text) => ({ text })),
   }));
+}
+
+/**
+ * Пересчитать активные месяцы при смене срока: при уменьшении обрезаем хвост;
+ * при увеличении продлеваем только направления, активные в прежнем последнем
+ * месяце (тогда «полные» остаются полными, а обрывающиеся не «оживают»).
+ */
+function remapMonths(
+  current: number[],
+  oldDuration: number,
+  newDuration: number,
+): number[] {
+  if (newDuration <= oldDuration) {
+    return current.filter((m) => m <= newDuration);
+  }
+  const wasActiveLast = current.includes(oldDuration);
+  if (!wasActiveLast) return current;
+  const extra: number[] = [];
+  for (let m = oldDuration + 1; m <= newDuration; m++) extra.push(m);
+  return [...current, ...extra];
 }
 
 const STEPS = ["Параметры", "Направления", "Генерация"];
@@ -51,7 +76,20 @@ export default function Wizard() {
 
   // Любое изменение содержимого сбрасывает факт сохранения.
   const patchInput = (patch: Partial<ProposalInput>) => {
-    setInput((s) => ({ ...s, ...patch }));
+    setInput((s) => {
+      // При смене срока пересобираем активные месяцы каждого направления.
+      if (patch.durationMonths && patch.durationMonths !== s.durationMonths) {
+        const oldD = s.durationMonths;
+        const newD = patch.durationMonths;
+        setDirections((dirs) =>
+          dirs.map((d) => ({
+            ...d,
+            activeMonths: remapMonths(d.activeMonths, oldD, newD),
+          })),
+        );
+      }
+      return { ...s, ...patch };
+    });
     setSavedId(null);
   };
   const patchMeta = (patch: Partial<ProposalMeta>) => {
@@ -109,7 +147,11 @@ export default function Wizard() {
             />
           )}
           {step === 1 && (
-            <StepDirections directions={directions} onChange={changeDirections} />
+            <StepDirections
+              directions={directions}
+              durationMonths={input.durationMonths}
+              onChange={changeDirections}
+            />
           )}
           {step === 2 && (
             <StepReview

@@ -67,21 +67,40 @@ make dev       # dev-сервер в foreground; make start — фоном; make
 - Наборы коэффициентов **различаются** по направлениям (см. `DIRECTION_COEFFICIENTS`):
   Коммерческое/GEO — все; Информационное/SERM — без страниц/ошибок/конкуренции;
   Техподдержка — только страницы/ошибки/опыт.
-- Итог/мес = сумма включённых; итог за проект = месячный × срок (3/6).
+- Итог/мес = сумма включённых.
+- **Помесячный состав** (главное отличие от Excel-исходника). Направление активно не на весь срок,
+  а в произвольный набор месяцев: `DirectionSelection.activeMonths: number[]` (1-based; `[]` = не
+  входит). «Включено» = `activeMonths.length > 0`. Срок остаётся 3/6 мес.
+  - `calculate(input, directions)` (lib/calc.ts) — **неизменное ядро одного месяца** (на нём держится
+    золотой тест). `calculateSchedule(input, directions)` — надстройка: для каждого месяца строит срез
+    активных направлений и зовёт `calculate`, затем суммирует. Возвращает `ScheduleResult`
+    (`months: MonthBreakdown[]`, `perDirection: DirectionScheduleCalc[]` с `activeMonths`/`monthsLabel`/
+    `totalPrice`, грандтоталы). Итог за срок = **сумма помесячных**, а не месяц × срок.
+  - `Proposal.calcSnapshot` теперь `ScheduleResult`. Все потребители (CostPanel, StepReview, PDF, Excel,
+    storage) считают через `calculateSchedule`.
+  - **Обратная совместимость**: старые КП в БД хранят `included: boolean` без `activeMonths`.
+    `normalizeActiveMonths` (lib/calc.ts) приводит к `activeMonths` (`included:true` → все месяцы), а
+    `validation.ts` принимает оба поля. Поэтому рендер старых JSON безопасен.
+  - UI ввода — матрица «направления × месяцы» в `StepDirections`; смена срока ремапит `activeMonths`
+    (`Wizard.remapMonths`). Подпись месяцев — `formatMonthRanges` (lib/format.ts).
 - **Пакетная скидка** (`COMMERCIAL_BUNDLE` в `seo-config.ts`): если включено **Коммерческое
   SEO**, то включённые **GEO и SERM** считаются со скидкой **30%** (`monthlyPrice` =
-  `round(fullMonthlyPrice × 0.7)`; часы — от цены со скидкой). В `DirectionCalc` есть
-  `fullMonthlyPrice`/`discountRate`, в `CalcResult` — `monthlyTotalFullPrice`/`monthlyDiscount`.
+  `round(fullMonthlyPrice × 0.7)`; часы — от цены со скидкой). Применяется **помесячно**: в месяце,
+  где активно Коммерческое, активные GEO/SERM этого месяца идут со скидкой, иначе — по полной (это
+  выходит само за счёт `calculateSchedule`, вызывающего `calculate` помесячно). В `DirectionCalc` есть
+  `fullMonthlyPrice`/`discountRate`, в `ScheduleResult` — `totalFullPrice`/`totalDiscount`.
   Скидку показываем всюду: CostPanel, StepReview, PDF (смета + детально + карточка стоимости),
-  Excel (колонки «Полная цена/мес» и «Скидка/мес»). Нет в исходном Excel — это бизнес-правило.
+  Excel (колонки «Полная цена за срок» и «Скидка за срок»). Нет в исходном Excel — это бизнес-правило.
 - **Золотой тест** (значения из кэша Excel — это **полные** цены до скидок): Вся РБ, b2b, до 1000,
   Единичные, Сайт продвигался, Базово, Средняя → `1525/1155/1307/825/540`, сумма полных
   **5352 BYN**. С пакетной скидкой (Коммерческое включено) GEO→`915`, SERM→`578`, итог/мес =
   **4713 BYN / 62 ч**, скидка **639 BYN**. Любая правка расчёта обязана оставлять `npm test` зелёным.
+  Тесты `calculateSchedule`/`formatMonthRanges` — там же.
 
 ## Принятые решения и допущения
 
-- Валюта **BYN**. Срок: расчёт Excel = стоимость за месяц, итог = месяц × срок.
+- Валюта **BYN**. Срок 3/6 мес. Итог за срок = **сумма помесячных** итогов (см. `calculateSchedule`),
+  т.к. набор направлений может различаться по месяцам (раньше было месяц × срок).
 - «Ссылочное продвижение» и «Конкуренция» — поля формы (есть в Excel, не было в ТЗ).
 - «Что продвигаем» **не влияет** на цену (нет коэффициента) — только текст в КП.
 - «до 500» страниц в Excel **отсутствует** → коэффициент `1.1` (допущение, правится в config).
