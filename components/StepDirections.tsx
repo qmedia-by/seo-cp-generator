@@ -1,16 +1,26 @@
 "use client";
 
 import { useState } from "react";
+import { formatMonthRanges } from "@/lib/format";
 import { WORKS_CATALOG_BY_KEY } from "@/lib/works-catalog";
-import type { DirectionSelection, WorkItem } from "@/lib/types";
+import type { DirectionKey, DirectionSelection, WorkItem } from "@/lib/types";
 
 interface Props {
   directions: DirectionSelection[];
+  durationMonths: number;
   onChange: (next: DirectionSelection[]) => void;
 }
 
-export default function StepDirections({ directions, onChange }: Props) {
-  const [expanded, setExpanded] = useState<string | null>(directions[0]?.key ?? null);
+export default function StepDirections({
+  directions,
+  durationMonths,
+  onChange,
+}: Props) {
+  const [expanded, setExpanded] = useState<string | null>(
+    directions[0]?.key ?? null,
+  );
+
+  const months = Array.from({ length: durationMonths }, (_, i) => i + 1);
 
   const updateDirection = (
     key: string,
@@ -19,17 +29,98 @@ export default function StepDirections({ directions, onChange }: Props) {
     onChange(directions.map((d) => (d.key === key ? { ...d, ...patch } : d)));
   };
 
+  const setActiveMonths = (key: DirectionKey, next: number[]) => {
+    const sorted = Array.from(new Set(next)).sort((a, b) => a - b);
+    updateDirection(key, { activeMonths: sorted });
+  };
+
+  const toggleMonth = (key: DirectionKey, month: number, current: number[]) => {
+    setActiveMonths(
+      key,
+      current.includes(month)
+        ? current.filter((m) => m !== month)
+        : [...current, month],
+    );
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <h2 className="text-lg font-bold mb-1">Направления и виды работ</h2>
         <p className="text-sm text-brand-gray">
-          Все 5 направлений попадут в КП. Выключенные будут показаны с пометкой
-          «не входит в продвижение». Внутри направления можно убрать лишние
+          Отметьте, в какие месяцы работает каждое направление. По умолчанию все
+          направления включены во все месяцы. Выключенные во всех месяцах попадут
+          в КП с пометкой «не входит». Внутри направления можно убрать лишние
           работы или добавить свои.
         </p>
       </div>
 
+      {/* Матрица «направления × месяцы» */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 overflow-x-auto">
+        <div className="min-w-[460px]">
+          <div className="flex items-center gap-1 pb-2 mb-2 border-b border-gray-100 text-xs text-brand-gray">
+            <div className="flex-1 font-semibold uppercase tracking-wide">
+              Направление
+            </div>
+            {months.map((m) => (
+              <div key={m} className="w-8 text-center font-semibold">
+                {m}
+              </div>
+            ))}
+            <div className="w-20" />
+          </div>
+
+          {directions.map((d) => {
+            const active = new Set(d.activeMonths);
+            const included = d.activeMonths.length > 0;
+            const allOn = d.activeMonths.length === durationMonths;
+            return (
+              <div key={d.key} className="flex items-center gap-1 py-1">
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={`text-sm font-medium truncate ${
+                      included ? "" : "text-brand-gray"
+                    }`}
+                    title={d.name}
+                  >
+                    {d.name}
+                  </div>
+                </div>
+                {months.map((m) => {
+                  const on = active.has(m);
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => toggleMonth(d.key, m, d.activeMonths)}
+                      aria-pressed={on}
+                      title={`Месяц ${m}`}
+                      className={`w-8 h-8 rounded-md grid place-items-center text-xs transition ${
+                        on
+                          ? "bg-brand-green text-white"
+                          : "bg-gray-100 text-gray-300 hover:bg-gray-200"
+                      }`}
+                    >
+                      {on ? "✓" : ""}
+                    </button>
+                  );
+                })}
+                <div className="w-20 flex justify-end gap-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMonths(d.key, allOn ? [] : months)}
+                    className="rounded px-1.5 py-1 text-brand-greenDark hover:bg-brand-green/10"
+                  >
+                    {allOn ? "снять" : "все"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Аккордеоны для выбора работ */}
       {directions.map((d) => {
         const catalog = WORKS_CATALOG_BY_KEY[d.key].works;
         const checked = new Set(
@@ -37,6 +128,8 @@ export default function StepDirections({ directions, onChange }: Props) {
         );
         const customWorks = d.works.filter((w) => w.custom);
         const isOpen = expanded === d.key;
+        const included = d.activeMonths.length > 0;
+        const monthsLabel = formatMonthRanges(d.activeMonths, durationMonths);
 
         const toggleWork = (text: string) => {
           const next = new Set(checked);
@@ -53,31 +146,31 @@ export default function StepDirections({ directions, onChange }: Props) {
           <div
             key={d.key}
             className={`rounded-2xl border bg-white overflow-hidden transition ${
-              d.included ? "border-gray-300" : "border-gray-200 opacity-70"
+              included ? "border-gray-300" : "border-gray-200 opacity-70"
             }`}
           >
-            <div className="flex items-center gap-3 p-4">
-              <Toggle
-                on={d.included}
-                onClick={() => updateDirection(d.key, { included: !d.included })}
-              />
-              <button
-                type="button"
-                className="flex-1 text-left"
-                onClick={() => setExpanded(isOpen ? null : d.key)}
-              >
+            <button
+              type="button"
+              className="flex items-center gap-3 p-4 w-full text-left"
+              onClick={() => setExpanded(isOpen ? null : d.key)}
+            >
+              <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-bold">{d.name}</span>
-                  {!d.included && (
-                    <span className="text-xs rounded-full bg-gray-200 text-brand-gray px-2 py-0.5">
-                      не входит
-                    </span>
-                  )}
+                  <span
+                    className={`text-xs rounded-full px-2 py-0.5 ${
+                      included
+                        ? "bg-brand-green/10 text-brand-greenDark"
+                        : "bg-gray-200 text-brand-gray"
+                    }`}
+                  >
+                    {included ? monthsLabel : "не входит"}
+                  </span>
                 </div>
                 <div className="text-xs text-brand-gray italic mt-0.5">
                   {d.goal}
                 </div>
-              </button>
+              </div>
               <span className="text-sm text-brand-gray whitespace-nowrap">
                 {d.works.length} работ
               </span>
@@ -86,7 +179,7 @@ export default function StepDirections({ directions, onChange }: Props) {
               >
                 ▾
               </span>
-            </div>
+            </button>
 
             {isOpen && (
               <div className="border-t border-gray-200 p-4 space-y-2">
@@ -140,25 +233,6 @@ export default function StepDirections({ directions, onChange }: Props) {
         );
       })}
     </div>
-  );
-}
-
-function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative h-6 w-11 rounded-full transition shrink-0 ${
-        on ? "bg-brand-green" : "bg-gray-300"
-      }`}
-      aria-pressed={on}
-    >
-      <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition ${
-          on ? "left-[22px]" : "left-0.5"
-        }`}
-      />
-    </button>
   );
 }
 

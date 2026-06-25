@@ -129,7 +129,7 @@ export default function ProposalList() {
                   {formatMoney(it.totalPrice)}
                 </span>
                 <span className="text-xs text-brand-gray">
-                  {formatMoney(it.monthlyTotalPrice)} / мес
+                  ≈ {formatMoney(it.monthlyTotalPrice)} / мес
                 </span>
               </div>
 

@@ -2,7 +2,7 @@
 // Повторяет логику Расчет SEO.xlsx: ставки, коэффициенты параметров и блок «Оценка проекта».
 
 import ExcelJS from "exceljs";
-import { calculate } from "../calc";
+import { calculateSchedule } from "../calc";
 import { BRAND, COMPANY } from "../company";
 import {
   AUDIENCE_COEF,
@@ -51,8 +51,9 @@ function sectionRow(ws: ExcelJS.Worksheet, label: string) {
 
 export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   const { input, directions } = proposal;
-  const calc = calculate(input, directions);
+  const calc = calculateSchedule(input, directions);
   const money = `# ##0.00 "${CURRENCY}"`;
+  const monthNums = calc.months.map((m) => m.month);
 
   const wb = new ExcelJS.Workbook();
   wb.creator = COMPANY.name;
@@ -115,66 +116,49 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   ws.addRow(["Срок продвижения", `${input.durationMonths} мес`, "—"]);
   ws.addRow([]);
 
-  // Оценка проекта
-  sectionRow(ws, "Оценка проекта (за месяц)");
+  // Оценка проекта (за весь срок)
+  sectionRow(ws, "Оценка проекта (за весь срок)");
   const estHeader = ws.addRow([
     "Направление",
-    "Статус",
+    "Месяцы",
     "Коэф. напр.",
-    "Полная цена/мес",
-    "Скидка/мес",
-    "Цена/мес",
-    "Часов/мес",
+    "Полная цена за срок",
+    "Скидка за срок",
+    "Цена за срок",
+    "Часов за срок",
   ]);
   estHeader.eachCell((c, col) => {
     if (col <= 7) headerFill(c);
   });
 
   for (const d of calc.perDirection) {
-    const discount = d.included ? d.monthlyPrice - d.fullMonthlyPrice : 0; // ≤ 0
+    const included = d.activeMonths.length > 0;
+    const discount = included ? d.totalPrice - d.totalFullPrice : 0; // ≤ 0
     const row = ws.addRow([
-      d.discountRate > 0
-        ? `${d.name} (−${Math.round(d.discountRate * 100)}%)`
-        : d.name,
-      d.included ? "включено" : "не входит",
+      d.name,
+      included ? d.monthsLabel : "не входит",
       DIRECTION_COEF[d.key],
-      d.included ? d.fullMonthlyPrice : 0,
+      included ? d.totalFullPrice : 0,
       discount,
-      d.included ? d.monthlyPrice : 0,
-      d.included ? d.monthlyHours : 0,
+      included ? d.totalPrice : 0,
+      included ? d.totalHours : 0,
     ]);
     row.getCell(4).numFmt = money;
     row.getCell(5).numFmt = money;
     row.getCell(6).numFmt = money;
-    if (!d.included) row.font = { color: { argb: "FF999999" } };
+    if (!included) row.font = { color: { argb: "FF999999" } };
   }
-
-  const totalRow = ws.addRow([
-    "Итого за месяц",
-    "",
-    "",
-    calc.monthlyTotalFullPrice,
-    -calc.monthlyDiscount,
-    calc.monthlyTotalPrice,
-    calc.monthlyTotalHours,
-  ]);
-  totalRow.font = { bold: true };
-  totalRow.getCell(4).numFmt = money;
-  totalRow.getCell(5).numFmt = money;
-  totalRow.getCell(6).numFmt = money;
 
   ws.addRow([]);
   const durRow = ws.addRow(["Срок продвижения", `${input.durationMonths} мес`]);
   durRow.font = { bold: true };
 
-  const fullTermPrice = calc.monthlyTotalFullPrice * input.durationMonths;
-  const termDiscount = calc.monthlyDiscount * input.durationMonths;
   const grandRow = ws.addRow([
     `Итого за ${input.durationMonths} мес`,
     "",
     "",
-    fullTermPrice,
-    -termDiscount,
+    calc.totalFullPrice,
+    -calc.totalDiscount,
     calc.totalPrice,
     calc.totalHours,
   ]);
@@ -190,6 +174,50 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   grandRow.getCell(4).numFmt = money;
   grandRow.getCell(5).numFmt = money;
   grandRow.getCell(6).numFmt = money;
+  ws.addRow([]);
+
+  // Матрица «направления × месяцы»
+  sectionRow(ws, "Помесячный график");
+  const mtxHeader = ws.addRow([
+    "Направление",
+    ...monthNums.map((m) => `М${m}`),
+  ]);
+  mtxHeader.eachCell((c, col) => {
+    if (col <= monthNums.length + 1) headerFill(c);
+    if (col >= 2) c.alignment = { horizontal: "center" };
+  });
+
+  for (const d of calc.perDirection) {
+    const active = new Set(d.activeMonths);
+    const row = ws.addRow([
+      d.name,
+      ...monthNums.map((m) => (active.has(m) ? "✓" : "")),
+    ]);
+    for (let col = 2; col <= monthNums.length + 1; col++) {
+      const cell = row.getCell(col);
+      cell.alignment = { horizontal: "center" };
+      cell.font = { bold: true, color: { argb: GREEN_DARK } };
+    }
+    if (d.activeMonths.length === 0)
+      row.getCell(1).font = { color: { argb: "FF999999" } };
+  }
+
+  const mtxPriceRow = ws.addRow([
+    "Стоимость / мес",
+    ...calc.months.map((m) => m.monthlyTotalPrice),
+  ]);
+  mtxPriceRow.font = { bold: true };
+  for (let col = 2; col <= monthNums.length + 1; col++) {
+    mtxPriceRow.getCell(col).numFmt = money;
+  }
+
+  const mtxHoursRow = ws.addRow([
+    "Часов / мес",
+    ...calc.months.map((m) => m.monthlyTotalHours),
+  ]);
+  for (let col = 2; col <= monthNums.length + 1; col++) {
+    mtxHoursRow.getCell(col).alignment = { horizontal: "center" };
+  }
 
   // --- Лист 2: План работ ---
   const wp = wb.addWorksheet("План работ");
@@ -197,26 +225,31 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   titleCell(wp.getCell("A1"), "План работ по направлениям");
   wp.addRow([]);
 
+  const schedByKey = Object.fromEntries(
+    calc.perDirection.map((d) => [d.key, d]),
+  );
   for (const d of directions) {
+    const sd = schedByKey[d.key];
+    const included = sd.activeMonths.length > 0;
     const head = wp.addRow([
       "",
-      `${d.name} — ${d.included ? "включено" : "НЕ входит в продвижение"}`,
+      `${d.name} — ${included ? sd.monthsLabel : "НЕ входит в продвижение"}`,
     ]);
     head.getCell(2).font = {
       bold: true,
       size: 12,
-      color: { argb: d.included ? WHITE : INK },
+      color: { argb: included ? WHITE : INK },
     };
     head.getCell(2).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: d.included ? GREEN : "FFEDEDED" },
+      fgColor: { argb: included ? GREEN : "FFEDEDED" },
     };
     wp.addRow(["", d.goal]).getCell(2).font = {
       italic: true,
       color: { argb: "FF666666" },
     };
-    if (d.included) {
+    if (included) {
       d.works.forEach((w, i) => {
         const r = wp.addRow([i + 1, w.text]);
         r.getCell(2).alignment = { wrapText: true };

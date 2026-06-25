@@ -17,12 +17,16 @@ import {
   PAGES_COEF,
   REGION_COEF,
 } from "./seo-config";
+import { formatMonthRanges } from "./format";
 import type {
   CalcResult,
   CoefficientKey,
   DirectionCalc,
   DirectionKey,
+  DirectionScheduleCalc,
+  MonthBreakdown,
   ProposalInput,
+  ScheduleResult,
 } from "./types";
 
 /** Значение одного коэффициента для заданных входных данных. */
@@ -128,5 +132,101 @@ export function calculate(
     monthlyDiscount: monthlyTotalFullPrice - monthlyTotalPrice,
     totalPrice: monthlyTotalPrice * input.durationMonths,
     totalHours: monthlyTotalHours * input.durationMonths,
+  };
+}
+
+/**
+ * Привести направление к набору активных месяцев (1-based, в пределах срока).
+ * Поддерживает старый формат (`included: boolean`) для рендера ранее
+ * сохранённых КП: `included === true` → все месяцы, `false`/отсутствие → пусто.
+ */
+export function normalizeActiveMonths(
+  d: { activeMonths?: number[]; included?: boolean },
+  durationMonths: number,
+): number[] {
+  const all = Array.from({ length: durationMonths }, (_, i) => i + 1);
+  if (Array.isArray(d.activeMonths)) {
+    const set = new Set(
+      d.activeMonths.filter((m) => m >= 1 && m <= durationMonths),
+    );
+    return all.filter((m) => set.has(m));
+  }
+  return d.included ? all : [];
+}
+
+/**
+ * Помесячный расчёт: для каждого месяца берётся срез включённых в этот месяц
+ * направлений и считается через `calculate` (поэтому пакетная скидка работает
+ * помесячно — в месяце, где активно Коммерческое, GEO/SERM этого месяца идут со
+ * скидкой). Грандтоталы — суммы по месяцам.
+ *
+ * `directions` принимает как новый формат (`activeMonths`), так и старый
+ * (`included`) — нормализация внутри, поэтому потребители безопасны для старых КП.
+ */
+export function calculateSchedule(
+  input: ProposalInput,
+  directions: { key: DirectionKey; activeMonths?: number[]; included?: boolean }[],
+): ScheduleResult {
+  const durationMonths = input.durationMonths;
+  const activeByKey = new Map<DirectionKey, number[]>(
+    directions.map((d) => [d.key, normalizeActiveMonths(d, durationMonths)]),
+  );
+
+  const months: MonthBreakdown[] = [];
+  for (let month = 1; month <= durationMonths; month++) {
+    const sel = DIRECTION_ORDER.map((key) => ({
+      key,
+      included: (activeByKey.get(key) ?? []).includes(month),
+    }));
+    const m = calculate(input, sel);
+    months.push({
+      month,
+      perDirection: m.perDirection,
+      monthlyTotalPrice: m.monthlyTotalPrice,
+      monthlyTotalHours: m.monthlyTotalHours,
+      monthlyTotalFullPrice: m.monthlyTotalFullPrice,
+      monthlyDiscount: m.monthlyDiscount,
+    });
+  }
+
+  const perDirection: DirectionScheduleCalc[] = DIRECTION_ORDER.map((key) => {
+    const activeMonths = activeByKey.get(key) ?? [];
+    let totalPrice = 0;
+    let totalFullPrice = 0;
+    let totalHours = 0;
+    for (const month of activeMonths) {
+      const dc = months[month - 1].perDirection.find((p) => p.key === key);
+      if (!dc) continue;
+      totalPrice += dc.monthlyPrice;
+      totalFullPrice += dc.fullMonthlyPrice;
+      totalHours += dc.monthlyHours;
+    }
+    return {
+      key,
+      name: DIRECTION_NAME[key],
+      activeMonths,
+      monthsLabel: formatMonthRanges(activeMonths, durationMonths),
+      totalPrice,
+      totalFullPrice,
+      totalHours,
+    };
+  });
+
+  const totalPrice = months.reduce((s, m) => s + m.monthlyTotalPrice, 0);
+  const totalHours = months.reduce((s, m) => s + m.monthlyTotalHours, 0);
+  const totalFullPrice = months.reduce(
+    (s, m) => s + m.monthlyTotalFullPrice,
+    0,
+  );
+
+  return {
+    currency: CURRENCY,
+    durationMonths,
+    months,
+    perDirection,
+    totalPrice,
+    totalHours,
+    totalFullPrice,
+    totalDiscount: totalFullPrice - totalPrice,
   };
 }

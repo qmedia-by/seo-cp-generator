@@ -33,13 +33,21 @@ const workItemSchema = z.object({
   custom: z.boolean().optional(),
 });
 
-const directionSchema = z.object({
-  key: z.enum(["commercial", "info", "geo", "serm", "support"]),
-  name: z.string(),
-  goal: z.string(),
-  included: z.boolean(),
-  works: z.array(workItemSchema),
-});
+const directionSchema = z
+  .object({
+    key: z.enum(["commercial", "info", "geo", "serm", "support"]),
+    name: z.string(),
+    goal: z.string(),
+    // Новый формат: помесячный набор активных месяцев.
+    activeMonths: z.array(z.number().int().min(1).max(12)).optional(),
+    // Старый формат — для обратной совместимости при импорте сохранённого JSON.
+    included: z.boolean().optional(),
+    works: z.array(workItemSchema),
+  })
+  .refine((d) => d.activeMonths !== undefined || d.included !== undefined, {
+    message: "Нужно указать activeMonths или included",
+    path: ["activeMonths"],
+  });
 
 const metaSchema = z.object({
   clientName: z.string().trim().max(200).optional(),

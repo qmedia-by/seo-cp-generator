@@ -20,9 +20,9 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import { calculate } from "../calc";
+import { calculateSchedule } from "../calc";
 import { ADVANTAGES, BRAND, COMPANY } from "../company";
-import { formatHours, formatMoney, pluralMonths } from "../format";
+import { formatHours, formatInt, formatMoney, pluralMonths } from "../format";
 import type { Proposal } from "../types";
 
 const FONT_DIR = path.join(process.cwd(), "public", "fonts");
@@ -107,8 +107,8 @@ const s = StyleSheet.create({
     fontFamily: "QmediaSans",
     color: BRAND.ink,
     fontSize: 10,
-    paddingTop: BAND_H + 22,
-    paddingBottom: 40,
+    paddingTop: BAND_H + 14,
+    paddingBottom: 30,
     paddingHorizontal: 40,
     lineHeight: 1.4,
   },
@@ -118,7 +118,7 @@ const s = StyleSheet.create({
   subTitle: { fontSize: 14, fontWeight: 700, color: BRAND.ink },
 
   // Смета: две колонки
-  smetaRow: { flexDirection: "row", gap: 18, marginBottom: 16 },
+  smetaRow: { flexDirection: "row", gap: 18, marginBottom: 12 },
   smetaColLeft: { width: "54%" },
   smetaColRight: { width: "46%" },
 
@@ -127,22 +127,22 @@ const s = StyleSheet.create({
   paramLabel: { color: BRAND.gray, fontSize: 8, textTransform: "uppercase" },
   paramValue: { fontSize: 11, fontWeight: 700, color: BRAND.ink },
 
-  costCard: { backgroundColor: BRAND.greenTint, borderRadius: 12, padding: 18 },
+  costCard: { backgroundColor: BRAND.greenTint, borderRadius: 12, padding: 14 },
   costCardLabel: { fontSize: 9, fontWeight: 700, textTransform: "uppercase", color: BRAND.greenDark, letterSpacing: 1 },
-  costHighlight: { backgroundColor: BRAND.yellow, alignSelf: "flex-start", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, marginTop: 8, marginBottom: 10 },
+  costHighlight: { backgroundColor: BRAND.yellow, alignSelf: "flex-start", paddingVertical: 7, paddingHorizontal: 12, borderRadius: 6, marginTop: 6, marginBottom: 8 },
   costHighlightText: { fontSize: 27, fontWeight: 700, color: BRAND.ink, lineHeight: 1 },
-  costDivider: { height: 1, backgroundColor: "#CFE6C7", marginVertical: 8 },
-  costLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 },
+  costDivider: { height: 1, backgroundColor: "#CFE6C7", marginVertical: 6 },
+  costLine: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 },
   costLineLabel: { fontSize: 10, color: BRAND.gray },
   costLineValue: { fontSize: 11, fontWeight: 700, color: BRAND.ink },
 
   // Таблица направлений (смета)
   tHead: { flexDirection: "row", backgroundColor: BRAND.green, borderTopLeftRadius: 6, borderTopRightRadius: 6 },
-  tHeadCell: { color: BRAND.white, fontSize: 9, fontWeight: 700, paddingVertical: 6, paddingHorizontal: 8 },
-  tRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#ECECEC" },
-  tCell: { fontSize: 9.5, paddingVertical: 6, paddingHorizontal: 8 },
-  tTotal: { flexDirection: "row", backgroundColor: BRAND.greenTint, borderBottomLeftRadius: 6, borderBottomRightRadius: 6 },
-  tTotalCell: { fontSize: 10, fontWeight: 700, color: BRAND.ink, paddingVertical: 7, paddingHorizontal: 8 },
+  tHeadCell: { color: BRAND.white, fontSize: 9, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 8 },
+  tRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#ECECEC", alignItems: "center" },
+  tCell: { fontSize: 9.5, paddingVertical: 4, paddingHorizontal: 8 },
+  tTotal: { flexDirection: "row", backgroundColor: BRAND.greenTint, borderBottomLeftRadius: 6, borderBottomRightRadius: 6, alignItems: "center" },
+  tTotalCell: { fontSize: 10, fontWeight: 700, color: BRAND.ink, paddingVertical: 5, paddingHorizontal: 8 },
   cName: { width: "46%" },
   cStatus: { width: "20%" },
   cHours: { width: "16%", textAlign: "right" },
@@ -150,6 +150,15 @@ const s = StyleSheet.create({
   cPriceWrap: { width: "18%", paddingVertical: 6, paddingHorizontal: 8, alignItems: "flex-end" },
   cPriceFinal: { fontSize: 9.5 },
   cPriceStrike: { fontSize: 8, color: BRAND.gray, textDecoration: "line-through" },
+
+  // Матрица «направления × месяцы»
+  mtxHeadCellCenter: { color: BRAND.white, fontSize: 8.5, fontWeight: 700, paddingVertical: 5, paddingHorizontal: 2, textAlign: "center" },
+  // Маркер активного месяца рисуем View-кружком: в шрифте нет глифа «✓».
+  mtxCell: { paddingVertical: 4, alignItems: "center", justifyContent: "center" },
+  dotOn: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: BRAND.green },
+  dotOff: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#D5D5D5" },
+  mtxTermCell: { fontSize: 9.5, paddingVertical: 4, paddingHorizontal: 8, textAlign: "right" },
+  mtxTotalCellCenter: { fontSize: 8, fontWeight: 700, color: BRAND.ink, paddingVertical: 5, paddingHorizontal: 2, textAlign: "center" },
 
   badgeOn: { color: BRAND.greenDark, fontWeight: 700 },
   badgeOff: { color: BRAND.mute },
@@ -246,10 +255,17 @@ function SubHead({ title }: { title: string }) {
 
 export function ProposalDocument({ proposal }: { proposal: Proposal }) {
   const { input, directions, meta } = proposal;
-  const calc = calculate(input, directions);
+  const calc = calculateSchedule(input, directions);
   const calcByKey = Object.fromEntries(calc.perDirection.map((d) => [d.key, d]));
   const term = pluralMonths(calc.durationMonths);
   const clientLabel = meta?.clientName || input.siteName;
+
+  // Геометрия матрицы «направления × месяцы».
+  const nMonths = calc.durationMonths;
+  const monthNums = calc.months.map((m) => m.month);
+  const nameW = "34%";
+  const termW = "16%";
+  const monthW = `${50 / nMonths}%`;
 
   const params: [string, string][] = [
     ["Регион", input.region],
@@ -328,31 +344,23 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
               <View style={s.costHighlight}>
                 <Text style={s.costHighlightText}>{formatMoney(calc.totalPrice)}</Text>
               </View>
-              {calc.monthlyDiscount > 0 && (
+              {calc.totalDiscount > 0 && (
                 <>
                   <View style={s.costLine}>
-                    <Text style={s.costLineLabel}>Стоимость в месяц без скидки</Text>
+                    <Text style={s.costLineLabel}>Стоимость за срок без скидки</Text>
                     <Text style={[s.costLineValue, s.dirPriceStrike]}>
-                      {formatMoney(calc.monthlyTotalFullPrice)}
+                      {formatMoney(calc.totalFullPrice)}
                     </Text>
                   </View>
                   <View style={s.costLine}>
-                    <Text style={s.costLineLabel}>Скидка (Коммерческое SEO)</Text>
+                    <Text style={s.costLineLabel}>Скидка за срок (Коммерческое SEO)</Text>
                     <Text style={[s.costLineValue, { color: BRAND.greenDark }]}>
-                      −{formatMoney(calc.monthlyDiscount)}
+                      −{formatMoney(calc.totalDiscount)}
                     </Text>
                   </View>
                 </>
               )}
-              <View style={s.costLine}>
-                <Text style={s.costLineLabel}>Стоимость в месяц</Text>
-                <Text style={s.costLineValue}>{formatMoney(calc.monthlyTotalPrice)}</Text>
-              </View>
               <View style={s.costDivider} />
-              <View style={s.costLine}>
-                <Text style={s.costLineLabel}>Часов в месяц</Text>
-                <Text style={s.costLineValue}>{formatHours(calc.monthlyTotalHours)}</Text>
-              </View>
               <View style={s.costLine}>
                 <Text style={s.costLineLabel}>Всего часов за проект</Text>
                 <Text style={s.costLineValue}>{formatHours(calc.totalHours)}</Text>
@@ -365,47 +373,58 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
           </View>
         </View>
 
-        <SubHead title="Состав по направлениям (за месяц)" />
+        <SubHead title="Состав по месяцам" />
         <View style={s.tHead}>
-          <Text style={[s.tHeadCell, s.cName]}>Направление</Text>
-          <Text style={[s.tHeadCell, s.cStatus]}>Статус</Text>
-          <Text style={[s.tHeadCell, s.cHours]}>Часов/мес</Text>
-          <Text style={[s.tHeadCell, s.cPrice]}>Цена/мес</Text>
+          <Text style={[s.tHeadCell, { width: nameW }]}>Направление</Text>
+          {monthNums.map((m) => (
+            <Text key={m} style={[s.mtxHeadCellCenter, { width: monthW }]}>
+              {m}
+            </Text>
+          ))}
+          <Text style={[s.tHeadCell, s.cPrice, { width: termW }]}>За срок</Text>
         </View>
-        {calc.perDirection.map((d) => (
-          <View key={d.key} style={s.tRow} wrap={false}>
-            <Text style={[s.tCell, s.cName, d.included ? {} : s.muted]}>{d.name}</Text>
-            <Text style={[s.tCell, s.cStatus, d.included ? s.badgeOn : s.badgeOff]}>
-              {d.included
-                ? d.discountRate > 0
-                  ? `включено · −${Math.round(d.discountRate * 100)}%`
-                  : "включено"
-                : "не входит"}
-            </Text>
-            <Text style={[s.tCell, s.cHours, d.included ? {} : s.muted]}>
-              {d.included ? formatHours(d.monthlyHours) : "—"}
-            </Text>
-            <View style={s.cPriceWrap}>
-              {d.included ? (
-                <>
-                  {d.discountRate > 0 && (
-                    <Text style={s.cPriceStrike}>
-                      {formatMoney(d.fullMonthlyPrice)}
-                    </Text>
-                  )}
-                  <Text style={s.cPriceFinal}>{formatMoney(d.monthlyPrice)}</Text>
-                </>
-              ) : (
-                <Text style={[s.cPriceFinal, s.muted]}>—</Text>
-              )}
+        {calc.perDirection.map((d) => {
+          const active = new Set(d.activeMonths);
+          const included = d.activeMonths.length > 0;
+          const discounted = d.totalFullPrice > d.totalPrice;
+          return (
+            <View key={d.key} style={s.tRow} wrap={false}>
+              <Text style={[s.tCell, { width: nameW }, included ? {} : s.muted]}>
+                {d.name}
+              </Text>
+              {monthNums.map((m) => (
+                <View key={m} style={[s.mtxCell, { width: monthW }]}>
+                  <View style={active.has(m) ? s.dotOn : s.dotOff} />
+                </View>
+              ))}
+              <Text
+                style={[
+                  s.mtxTermCell,
+                  { width: termW },
+                  included ? {} : s.muted,
+                  included && discounted ? { color: BRAND.greenDark } : {},
+                ]}
+              >
+                {included ? formatMoney(d.totalPrice) : "—"}
+              </Text>
             </View>
-          </View>
-        ))}
+          );
+        })}
         <View style={s.tTotal} wrap={false}>
-          <Text style={[s.tTotalCell, s.cName]}>Итого в месяц</Text>
-          <Text style={[s.tTotalCell, s.cStatus]} />
-          <Text style={[s.tTotalCell, s.cHours]}>{formatHours(calc.monthlyTotalHours)}</Text>
-          <Text style={[s.tTotalCell, s.cPrice]}>{formatMoney(calc.monthlyTotalPrice)}</Text>
+          <Text style={[s.tTotalCell, { width: nameW }]}>
+            Стоимость / мес, {calc.currency}
+          </Text>
+          {calc.months.map((m) => (
+            <Text
+              key={m.month}
+              style={[s.mtxTotalCellCenter, { width: monthW }]}
+            >
+              {formatInt(Math.round(m.monthlyTotalPrice))}
+            </Text>
+          ))}
+          <Text style={[s.tTotalCell, s.cPrice, { width: termW }]}>
+            {formatMoney(calc.totalPrice)}
+          </Text>
         </View>
 
         <Footer />
@@ -416,32 +435,32 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
         <HeaderBand title="Направления продвижения" />
         {directions.map((d) => {
           const c = calcByKey[d.key];
+          const included = c.activeMonths.length > 0;
+          const discounted = c.totalFullPrice > c.totalPrice;
           return (
             <View key={d.key} style={s.dir} wrap={false}>
               <View style={s.dirHeadRow}>
                 <View style={s.dirNameWrap}>
-                  <View style={[s.dirDot, { backgroundColor: d.included ? BRAND.green : "#D0D0D0" }]} />
+                  <View style={[s.dirDot, { backgroundColor: included ? BRAND.green : "#D0D0D0" }]} />
                   <Text style={s.dirName}>{d.name}</Text>
                 </View>
-                <Text style={d.included ? s.dirBadgeOn : s.dirBadgeOff}>
-                  {d.included ? "включено" : "не входит"}
+                <Text style={included ? s.dirBadgeOn : s.dirBadgeOff}>
+                  {included ? c.monthsLabel : "не входит"}
                 </Text>
               </View>
               <Text style={s.dirGoal}>{clean(d.goal)}</Text>
-              {d.included ? (
+              {included ? (
                 <>
                   <Text style={s.dirPrice}>
-                    Стоимость:{" "}
-                    {c.discountRate > 0 && (
+                    Стоимость за срок:{" "}
+                    {discounted && (
                       <Text style={s.dirPriceStrike}>
-                        {formatMoney(c.fullMonthlyPrice)}{" "}
+                        {formatMoney(c.totalFullPrice)}{" "}
                       </Text>
                     )}
-                    <Text style={s.dirPriceStrong}>{formatMoney(c.monthlyPrice)}/мес</Text>
-                    {c.discountRate > 0
-                      ? ` (−${Math.round(c.discountRate * 100)}% за Коммерческое SEO)`
-                      : ""}{" "}
-                    · {formatHours(c.monthlyHours)}/мес
+                    <Text style={s.dirPriceStrong}>{formatMoney(c.totalPrice)}</Text>
+                    {discounted ? " (со скидкой за Коммерческое SEO)" : ""}{" "}
+                    · {c.monthsLabel} · {formatHours(c.totalHours)} за срок
                   </Text>
                   {d.works.map((w, i) => (
                     <View key={i} style={s.work}>
