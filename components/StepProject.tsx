@@ -10,6 +10,7 @@ import {
   PROMOTE_TYPE_OPTIONS,
   REGION_OPTIONS,
 } from "@/lib/seo-config";
+import { pluralMonths } from "@/lib/format";
 import type { ProposalInput, ProposalMeta } from "@/lib/types";
 
 interface Props {
@@ -60,7 +61,7 @@ export default function StepProject({ input, meta, onInput, onMeta }: Props) {
                     : "border-gray-300 bg-white hover:border-brand-green"
                 }`}
               >
-                {m} месяца
+                {pluralMonths(m)}
               </button>
             ))}
           </div>
