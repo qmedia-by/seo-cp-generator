@@ -8,6 +8,9 @@
 /out/
 next-env.d.ts
 
+# typescript (инкрементальный кэш сборки)
+*.tsbuildinfo
+
 # production
 /build
 
