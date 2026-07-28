@@ -60,6 +60,29 @@ make dev       # dev-сервер в foreground; make start — фоном; make
   и `ProposalList`.
 - `__tests__/calc.test.ts` — **золотой тест** (см. ниже).
 
+## Деплой (Docker, своё облако)
+
+Хостинг переезжает с Vercel/Supabase на собственный сервер с Docker. Схема повторяет
+CI соседнего проекта qmedia (образы в GHCR, compose на сервере, единый серверный `.env`):
+
+- `docker/Dockerfile` — multi-stage образ приложения: `npm ci` → `next build`
+  (**`output: "standalone"`** в `next.config.mjs`) → тонкий runtime `node:22-alpine`.
+  Контекст сборки — корень репо (лишнее режет `.dockerignore`). БД на сборке не нужна.
+- `docker/docker-compose-server.yml` — серверный стек: `app` (образ из GHCR, порт
+  `127.0.0.1:PORT_APP`, наружу — reverse-proxy хоста) + `database` (postgres:16-alpine,
+  том `pgdata`). `DATABASE_URL` собирается в compose с `?sslmode=disable` —
+  `lib/db.ts` понимает этот флаг и не включает TLS (иначе бы пытался, хост не localhost).
+- `.github/workflows/deployment.yml` — деплой на push в `main`/`dev` (environment
+  production/development) или вручную: preflight серверного `.env` → юнит-тесты →
+  build&push образа в GHCR → дамп БД + запоминание текущего `IMAGE_TAG` → rsync только
+  `docker/` → `compose pull` + `up --wait` → health-check → при провале откат на
+  предыдущий `IMAGE_TAG`. Код на сервер не синхронизируется — всё в образе.
+- Секреты (per-environment): `DEPLOYMENT_HOST/USER/SSH_PRIVATE_KEY/FOLDER`.
+  Одноразовый бутстрап сервера: `<DEPLOYMENT_FOLDER>/.env` из `.env.server.example`
+  (CI обновляет в нём только `IMAGE_TAG`) + reverse-proxy на `PORT_APP`.
+- Миграций в CI нет — схему создаёт `ensureSchema()` лениво при первом запросе.
+- `keep-supabase-awake.yml` актуален, пока прод-БД на Supabase; после переезда удалить.
+
 ## Доменная логика (расчёт)
 
 - База `750`, час `75` BYN. Цена направления/мес = `750 × коэф.направления × Π(применимые коэф.)`,

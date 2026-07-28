@@ -1,0 +1,21 @@
+# Контекст docker build — корень репозитория (см. docker/Dockerfile).
+# Всё лишнее отсекаем: меньше контекст — быстрее сборка и стабильнее кэш.
+.git
+.github
+.claude
+.vscode
+node_modules
+.next
+out
+build
+data
+docker
+sources
+__tests__
+*.md
+Makefile
+.env*
+*.log
+.dev-server.pid
+tsconfig.tsbuildinfo
+.DS_Store

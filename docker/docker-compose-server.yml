@@ -1,0 +1,45 @@
+# Серверный стек: app (образ из GHCR) + database (Postgres 16).
+# Запускается CI из корня деплой-папки:
+#   docker compose --env-file .env -f docker/docker-compose-server.yml up -d
+# Все переменные — из единого серверного .env (шаблон: .env.server.example).
+
+name: ${PROJECT_NAME}
+
+services:
+  app:
+    image: ${IMAGE_REPO}/app:${IMAGE_TAG}
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      # sslmode=disable — Postgres в соседнем контейнере, TLS не нужен
+      # (lib/db.ts включает SSL для всех нелокальных хостов, кроме явного disable).
+      DATABASE_URL: postgres://postgres:${DB_PASSWORD}@database:5432/${DB_DATABASE}?sslmode=disable
+    ports:
+      # Только localhost: наружу отдаёт reverse-proxy хоста (ispmanager/nginx).
+      - "127.0.0.1:${PORT_APP}:3000"
+    healthcheck:
+      # busybox wget есть в node:alpine; главная отвечает без БД (клиентский рендер)
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  database:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ${DB_DATABASE}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

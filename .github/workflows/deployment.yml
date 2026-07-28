@@ -1,0 +1,193 @@
+name: 🚀 Deploy to server
+
+# Контейнерный деплой: юнит-тесты на раннере, образ app (next build внутри
+# docker/Dockerfile, standalone) в GHCR, на сервере compose pull + up,
+# health-check; при провале — откат на предыдущий IMAGE_TAG. Код на сервер
+# не синхронизируется — приложение целиком в образе, туда едет только docker/.
+# Единый env на сервере: <DEPLOYMENT_FOLDER>/.env (создаётся руками из
+# .env.server.example, одноразово). Его читает compose (--env-file);
+# CI обновляет в нём только IMAGE_TAG. Миграций нет — схему БД приложение
+# создаёт само (ensureSchema, lib/db.ts).
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      server:
+        description: "Server"
+        required: true
+        type: choice
+        options: [development, production]
+        default: development
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # GITHUB_TOKEN должен уметь пушить образы в GHCR (дефолт org — read-only)
+    permissions:
+      contents: read
+      packages: write
+    environment: ${{ inputs.server || (github.ref_name == 'main' && 'production' || 'development') }}
+    env:
+      IMAGE_REPO: ghcr.io/${{ github.repository }}
+      COMPOSE: docker compose --env-file .env -f docker/docker-compose-server.yml
+
+    steps:
+      - name: 🚚 Checkout code
+        uses: actions/checkout@v4
+
+      # Одноразовый бутстрап сервера (.env + reverse-proxy на PORT_APP) делается
+      # руками — см. .env.server.example. Этот шаг ловит забытый/недозаполненный
+      # .env сразу, до тестов и сборки образа.
+      - name: 🧪 Preflight — server .env exists & filled
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            ENV_FILE="${{ secrets.DEPLOYMENT_FOLDER }}/.env"
+            if [ ! -f "$ENV_FILE" ]; then
+              echo "::error::Нет $ENV_FILE — создай его из .env.server.example (одноразовый бутстрап)"
+              exit 1
+            fi
+            if grep -q "CHANGE_ME" "$ENV_FILE"; then
+              echo "::error::В $ENV_FILE остались плейсхолдеры CHANGE_ME — заполни пароли"
+              exit 1
+            fi
+            for var in PROJECT_NAME PORT_APP DB_DATABASE DB_PASSWORD IMAGE_REPO IMAGE_TAG; do
+              if ! grep -q "^${var}=" "$ENV_FILE"; then
+                echo "::error::В $ENV_FILE отсутствует обязательная переменная ${var}"
+                exit 1
+              fi
+            done
+            echo "Preflight OK: $ENV_FILE is filled"
+
+      - name: 🟢 Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Золотой тест расчёта (__tests__/calc.test.ts) — БД не нужна, calc чистый.
+      - name: 🧪 Unit tests
+        run: |
+          npm ci
+          npm test
+
+      - name: 🔑 Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐳 Setup buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Контекст — корень репо (next build идёт внутри Dockerfile),
+      # лишнее отсекает .dockerignore.
+      - name: 🐳 Build & push app image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_REPO }}/app:${{ github.sha }}
+            ${{ env.IMAGE_REPO }}/app:latest
+          cache-from: type=gha,scope=app
+          cache-to: type=gha,scope=app,mode=max
+
+      # Дамп БД (для ручного восстановления) + текущий IMAGE_TAG (для отката).
+      - name: 📦 Backup DB & remember current image
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd ${{ secrets.DEPLOYMENT_FOLDER }}
+            if [ -f docker/docker-compose-server.yml ] && ${{ env.COMPOSE }} ps -q database | grep -q .; then
+              ${{ env.COMPOSE }} exec -T database \
+                sh -c 'pg_dump -U postgres "$POSTGRES_DB"' | gzip > pre-deploy-db.sql.gz
+            fi
+            grep '^IMAGE_TAG=' .env | cut -d= -f2- > .previous-image-tag
+
+      - name: 🚀 Deploy compose files
+        uses: easingthemes/ssh-deploy@main
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          ARGS: "-rlgoDzvc -i"
+          SOURCE: "docker/"
+          REMOTE_HOST: ${{ secrets.DEPLOYMENT_HOST }}
+          REMOTE_USER: ${{ secrets.DEPLOYMENT_USER }}
+          TARGET: ${{ secrets.DEPLOYMENT_FOLDER }}/docker/
+
+      - name: 🐳 Pull image & restart stack
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd ${{ secrets.DEPLOYMENT_FOLDER }}
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ github.sha }}|" .env
+            ${{ env.COMPOSE }} pull
+            ${{ env.COMPOSE }} up -d --remove-orphans --wait --wait-timeout 180
+            docker logout ghcr.io
+
+      - name: ✅ Health check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script_stop: true
+          script: |
+            cd ${{ secrets.DEPLOYMENT_FOLDER }}
+            PORT=$(grep '^PORT_APP=' .env | cut -d= -f2)
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PORT}/")
+            echo "HTTP ${code}"
+            case "$code" in 200|301|302) exit 0;; *) exit 1;; esac
+
+      # Возврат предыдущего образа. Том БД деплой не трогает; дамп — на случай
+      # ручного восстановления.
+      - name: 🔄 Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOYMENT_FOLDER }}
+            if [ -s .previous-image-tag ]; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$(cat .previous-image-tag)|" .env
+              ${{ env.COMPOSE }} up -d --remove-orphans
+              echo "Rolled back to image tag $(cat .previous-image-tag). DB dump (restore manually if needed): pre-deploy-db.sql.gz"
+            else
+              echo "Нет .previous-image-tag — откатывать не на что (первый деплой?)"
+            fi
+
+      - name: 🧹 Cleanup
+        if: success()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEPLOYMENT_HOST }}
+          username: ${{ secrets.DEPLOYMENT_USER }}
+          key: ${{ secrets.DEPLOYMENT_SSH_PRIVATE_KEY }}
+          script: |
+            cd ${{ secrets.DEPLOYMENT_FOLDER }}
+            rm -f pre-deploy-db.sql.gz .previous-image-tag
+            docker image prune -f

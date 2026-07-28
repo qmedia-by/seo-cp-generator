@@ -14,11 +14,15 @@ export function getPool(): Pool {
         "DATABASE_URL не задан. Укажите строку подключения к Postgres (Neon/Supabase).",
       );
     }
-    // Neon/Supabase требуют TLS; для локального Postgres SSL отключаем.
-    const isLocal = /@(localhost|127\.0\.0\.1)\b/.test(connectionString);
+    // Управляемые Postgres (Neon/Supabase) требуют TLS; для локального Postgres
+    // и соседнего docker-контейнера (host `database`) SSL отключаем — либо по
+    // локальному хосту, либо явным ?sslmode=disable в строке подключения.
+    const sslOff =
+      /@(localhost|127\.0\.0\.1)\b/.test(connectionString) ||
+      /\bsslmode=disable\b/.test(connectionString);
     pool = new Pool({
       connectionString,
-      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      ssl: sslOff ? undefined : { rejectUnauthorized: false },
       // На serverless-инстансах держим пул маленьким; пулинг лучше делать
       // на стороне провайдера (используйте pooled/pooler строку подключения).
       max: 3,
