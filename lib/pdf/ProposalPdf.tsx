@@ -23,7 +23,16 @@ import {
 } from "@react-pdf/renderer";
 import { calculateSchedule } from "../calc";
 import { ADVANTAGES, BRAND, COMPANY, PHOTOS } from "../company";
-import { formatHours, formatInt, formatMoney, pluralMonths } from "../format";
+import {
+  formatAmount,
+  formatHours,
+  formatInt,
+  formatMonthlyAmount,
+  formatMonthlyHours,
+  formatMonthlyMoney,
+  formatMoney,
+  pluralMonths,
+} from "../format";
 import {
   PITCH_ANALYTICS,
   PITCH_CLIENTS,
@@ -224,6 +233,8 @@ const s = StyleSheet.create({
   dotOn: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: BRAND.green },
   dotOff: { width: 4, height: 4, borderRadius: 2, backgroundColor: "#D5D5D5" },
   mtxTermCell: { fontSize: 9.5, paddingVertical: 4, paddingHorizontal: 8, textAlign: "right" },
+  // Сумма за срок — вспомогательная: тот же кегль (иначе строка «поедет»), но серым.
+  tCellSub: { color: BRAND.gray },
   mtxTotalCellCenter: { fontSize: 10, fontWeight: 700, color: BRAND.ink, paddingVertical: 5, paddingHorizontal: 2, textAlign: "center" },
 
   badgeOn: { color: BRAND.greenDark, fontWeight: 700 },
@@ -577,6 +588,11 @@ function WorksSlide({
   const active = new Set(calc.activeMonths);
   const discounted = calc.totalFullPrice > calc.totalPrice;
   const months = Array.from({ length: durationMonths }, (_, i) => i + 1);
+  // Экономия считается по месяцам поэлементно: если направление активно и в
+  // месяцы со скидкой, и без неё, разница минимумов дала бы неверную величину.
+  const discountPerMonth = calc.fullPricePerMonth.map(
+    (full, i) => full - calc.pricePerMonth[i],
+  );
 
   return (
     <Page size="A4" orientation="landscape" style={s.page} wrap>
@@ -586,17 +602,21 @@ function WorksSlide({
 
       <View style={s.dirCost} wrap={false}>
         <View style={s.dirCostMain}>
-          <Text style={s.dirCostLabel}>Стоимость за срок</Text>
+          <Text style={s.dirCostLabel}>Стоимость в месяц</Text>
           <View style={s.dirCostSum}>
-            <Text style={s.dirCostSumText}>{formatMoney(calc.totalPrice)}</Text>
+            <Text style={s.dirCostSumText}>
+              {formatMonthlyMoney(calc.pricePerMonth)}
+            </Text>
           </View>
           {discounted && (
             <Text style={s.dirCostNote}>
               без скидки{" "}
-              <Text style={s.dirPriceStrike}>{formatMoney(calc.totalFullPrice)}</Text>
-              {" · пакетная скидка "}
+              <Text style={s.dirPriceStrike}>
+                {formatMonthlyMoney(calc.fullPricePerMonth)}
+              </Text>
+              {" · экономия "}
               <Text style={{ color: BRAND.greenDark, fontWeight: 700 }}>
-                −{formatMoney(calc.totalFullPrice - calc.totalPrice)}
+                {formatMonthlyMoney(discountPerMonth)}
               </Text>
             </Text>
           )}
@@ -613,12 +633,18 @@ function WorksSlide({
               />
             ))}
           </View>
+          <Text style={s.dirCostSub}>за срок — {formatMoney(calc.totalPrice)}</Text>
         </View>
 
         <View style={s.dirCostCell}>
           <Text style={s.dirCostLabel}>Объём работ</Text>
-          <Text style={s.dirCostValue}>{formatHours(calc.totalHours)} за срок</Text>
-          <Text style={s.dirCostSub}>{direction.works.length} видов работ</Text>
+          <Text style={s.dirCostValue}>
+            {formatMonthlyHours(calc.hoursPerMonth)} в месяц
+          </Text>
+          <Text style={s.dirCostSub}>
+            {direction.works.length} видов работ · {formatHours(calc.totalHours)} за
+            срок
+          </Text>
         </View>
       </View>
 
@@ -677,9 +703,23 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
   // Геометрия матрицы «направления × месяцы».
   const nMonths = calc.durationMonths;
   const monthNums = calc.months.map((m) => m.month);
-  const nameW = "34%";
+  const nameW = "30%";
+  const perMonthW = "16%";
   const termW = "16%";
-  const monthW = `${50 / nMonths}%`;
+  const monthW = `${38 / nMonths}%`;
+
+  // Помесячные величины проекта. Считаем по месяцам, где есть работы: месяц без
+  // единого активного направления не должен занижать «платёж в месяц» до нуля.
+  const paidMonths = calc.months.filter((m) => m.monthlyTotalPrice > 0);
+  const monthlyPrices = paidMonths.map((m) => m.monthlyTotalPrice);
+  const monthlyFullPrices = paidMonths.map((m) => m.monthlyTotalFullPrice);
+  const monthlyDiscounts = paidMonths.map((m) => m.monthlyDiscount);
+  const monthlyHours = paidMonths.map((m) => m.monthlyTotalHours);
+  // Если набор направлений одинаков во все месяцы, «без скидки» и «экономию»
+  // можно дать помесячно. Когда месяцы разные, минимумы по строкам пришли бы из
+  // разных месяцев и не сходились бы между собой — тогда экономию считаем за срок.
+  const sameEveryMonth =
+    new Set(monthlyPrices).size <= 1 && new Set(monthlyFullPrices).size <= 1;
 
   const params: [string, string][] = [
     ["Регион", input.region],
@@ -846,36 +886,53 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
           </View>
 
           <View style={s.smetaColRight}>
-            <SubHead title="Общая стоимость" />
+            {/* Акцент — платёж за один месяц: сумма за весь срок пугает клиента
+                и остаётся справочной строкой внизу карточки. */}
+            <SubHead title="Стоимость" />
             <View style={s.costCard}>
-              <Text style={s.costCardLabel}>Итого за {term}</Text>
+              <Text style={s.costCardLabel}>Платёж в месяц</Text>
               <View style={s.costHighlight}>
-                <Text style={s.costHighlightText}>{formatMoney(calc.totalPrice)}</Text>
+                <Text style={s.costHighlightText}>
+                  {formatMonthlyMoney(monthlyPrices)}
+                </Text>
               </View>
               {calc.totalDiscount > 0 && (
                 <>
+                  {sameEveryMonth && (
+                    <View style={s.costLine}>
+                      <Text style={s.costLineLabel}>Без скидки в месяц</Text>
+                      <Text style={[s.costLineValue, s.dirPriceStrike]}>
+                        {formatMoney(monthlyFullPrices[0])}
+                      </Text>
+                    </View>
+                  )}
                   <View style={s.costLine}>
-                    <Text style={s.costLineLabel}>Стоимость за срок без скидки</Text>
-                    <Text style={[s.costLineValue, s.dirPriceStrike]}>
-                      {formatMoney(calc.totalFullPrice)}
+                    <Text style={s.costLineLabel}>
+                      {sameEveryMonth ? "Экономия в месяц" : `Экономия за ${term}`}{" "}
+                      (пакетная скидка)
                     </Text>
-                  </View>
-                  <View style={s.costLine}>
-                    <Text style={s.costLineLabel}>Скидка за срок (Коммерческое SEO)</Text>
                     <Text style={[s.costLineValue, { color: BRAND.greenDark }]}>
-                      −{formatMoney(calc.totalDiscount)}
+                      {formatMoney(
+                        sameEveryMonth ? monthlyDiscounts[0] : calc.totalDiscount,
+                      )}
                     </Text>
                   </View>
                 </>
               )}
               <View style={s.costDivider} />
               <View style={s.costLine}>
-                <Text style={s.costLineLabel}>Всего часов за проект</Text>
-                <Text style={s.costLineValue}>{formatHours(calc.totalHours)}</Text>
+                <Text style={s.costLineLabel}>Часов в месяц</Text>
+                <Text style={s.costLineValue}>
+                  {formatMonthlyHours(monthlyHours)}
+                </Text>
               </View>
               <View style={s.costLine}>
                 <Text style={s.costLineLabel}>Срок продвижения</Text>
                 <Text style={s.costLineValue}>{term}</Text>
+              </View>
+              <View style={s.costLine}>
+                <Text style={s.costLineLabel}>Итого за {term}</Text>
+                <Text style={s.costLineValue}>{formatMoney(calc.totalPrice)}</Text>
               </View>
             </View>
           </View>
@@ -884,12 +941,17 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
         <SubHead title="Состав по месяцам" />
         <View style={s.tHead}>
           <Text style={[s.tHeadCell, { width: nameW }]}>Направление</Text>
+          <Text style={[s.tHeadCell, s.cPrice, { width: perMonthW }]}>
+            В месяц, {calc.currency}
+          </Text>
           {monthNums.map((m) => (
             <Text key={m} style={[s.mtxHeadCellCenter, { width: monthW }]}>
               {m}
             </Text>
           ))}
-          <Text style={[s.tHeadCell, s.cPrice, { width: termW }]}>За срок</Text>
+          <Text style={[s.tHeadCell, s.cPrice, { width: termW }]}>
+            За срок, {calc.currency}
+          </Text>
         </View>
         {calc.perDirection.map((d) => {
           const active = new Set(d.activeMonths);
@@ -900,27 +962,36 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
               <Text style={[s.tCell, { width: nameW }, included ? {} : s.muted]}>
                 {d.name}
               </Text>
+              {/* Цена месяца — главная цифра строки; сумма за срок рядом, но серым. */}
+              <Text
+                style={[
+                  s.mtxTermCell,
+                  { width: perMonthW },
+                  included ? {} : s.muted,
+                  included && discounted ? { color: BRAND.greenDark } : {},
+                ]}
+              >
+                {included ? formatMonthlyAmount(d.pricePerMonth) : "—"}
+              </Text>
               {monthNums.map((m) => (
                 <View key={m} style={[s.mtxCell, { width: monthW }]}>
                   <View style={active.has(m) ? s.dotOn : s.dotOff} />
                 </View>
               ))}
               <Text
-                style={[
-                  s.mtxTermCell,
-                  { width: termW },
-                  included ? {} : s.muted,
-                  included && discounted ? { color: BRAND.greenDark } : {},
-                ]}
+                style={[s.mtxTermCell, { width: termW }, included ? s.tCellSub : s.muted]}
               >
-                {included ? formatMoney(d.totalPrice) : "—"}
+                {included ? formatAmount(d.totalPrice) : "—"}
               </Text>
             </View>
           );
         })}
         <View style={s.tTotal} wrap={false}>
           <Text style={[s.tTotalCell, { width: nameW }]}>
-            Стоимость / мес, {calc.currency}
+            Итого, {calc.currency}
+          </Text>
+          <Text style={[s.tTotalCell, s.cPrice, { width: perMonthW }]}>
+            {formatMonthlyAmount(monthlyPrices)}
           </Text>
           {calc.months.map((m) => (
             <Text
@@ -931,7 +1002,7 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
             </Text>
           ))}
           <Text style={[s.tTotalCell, s.cPrice, { width: termW }]}>
-            {formatMoney(calc.totalPrice)}
+            {formatAmount(calc.totalPrice)}
           </Text>
         </View>
 

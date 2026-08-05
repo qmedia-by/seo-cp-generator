@@ -10,7 +10,12 @@ const moneyFmt = new Intl.NumberFormat("ru-RU", {
 const intFmt = new Intl.NumberFormat("ru-RU");
 
 export function formatMoney(value: number, currency = CURRENCY): string {
-  return `${moneyFmt.format(value)} ${currency}`;
+  return `${formatAmount(value)} ${currency}`;
+}
+
+/** Сумма без валюты — для таблиц, где валюта вынесена в шапку колонки. */
+export function formatAmount(value: number): string {
+  return moneyFmt.format(value);
 }
 
 export function formatInt(value: number): string {
@@ -19,6 +24,37 @@ export function formatInt(value: number): string {
 
 export function formatHours(value: number): string {
   return `${intFmt.format(value)} ч`;
+}
+
+/**
+ * Помесячная величина для КП: суммы за срок пугают клиента, поэтому в PDF
+ * акцент на платеже за один месяц. Набор направлений (и пакетная скидка) может
+ * различаться по месяцам — тогда показываем минимальный платёж с «от», детали
+ * клиент видит в таблице «Состав по месяцам».
+ *
+ * `values` — значения по активным месяцам; нули (месяц без работ) отбрасываем.
+ */
+function formatPerMonth(values: number[], fmt: (v: number) => string): string {
+  const paid = values.filter((v) => v > 0);
+  if (paid.length === 0) return "—";
+  const min = Math.min(...paid);
+  const max = Math.max(...paid);
+  return min === max ? fmt(min) : `от ${fmt(min)}`;
+}
+
+/** «5 952,00 BYN» / «от 4 100,00 BYN» — платёж за один месяц. */
+export function formatMonthlyMoney(values: number[], currency = CURRENCY): string {
+  return formatPerMonth(values, (v) => formatMoney(v, currency));
+}
+
+/** То же без валюты — для колонок таблицы. */
+export function formatMonthlyAmount(values: number[]): string {
+  return formatPerMonth(values, formatAmount);
+}
+
+/** «62 ч» / «от 45 ч» — объём работ за один месяц. */
+export function formatMonthlyHours(values: number[]): string {
+  return formatPerMonth(values, formatHours);
 }
 
 export function formatDate(iso: string): string {

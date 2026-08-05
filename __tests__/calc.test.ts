@@ -6,7 +6,15 @@ import {
   normalizeActiveMonths,
   priceToHours,
 } from "../lib/calc";
-import { formatMonthRanges } from "../lib/format";
+import {
+  formatAmount,
+  formatHours,
+  formatMonthRanges,
+  formatMonthlyAmount,
+  formatMonthlyHours,
+  formatMonthlyMoney,
+  formatMoney,
+} from "../lib/format";
 import { DIRECTION_ORDER } from "../lib/seo-config";
 import type { DirectionKey, ProposalInput } from "../lib/types";
 
@@ -184,6 +192,25 @@ describe("calculateSchedule — помесячный набор направле
     expect(res.months[2].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(1307);
     expect(geo.totalPrice).toBe(915 * 2 + 1307 * 4);
     expect(geo.totalFullPrice).toBe(1307 * 6);
+    // Помесячные величины (из них КП показывает платёж «в месяц»).
+    expect(geo.pricePerMonth).toEqual([915, 915, 1307, 1307, 1307, 1307]);
+    expect(geo.fullPricePerMonth).toEqual([1307, 1307, 1307, 1307, 1307, 1307]);
+    expect(geo.hoursPerMonth).toEqual([12, 12, 17, 17, 17, 17]);
+  });
+
+  it("помесячные величины идут только по активным месяцам", () => {
+    const dirs = DIRECTION_ORDER.map((key) => ({
+      key,
+      activeMonths: key === "serm" ? [1, 2] : [],
+    }));
+    const res = calculateSchedule(input6, dirs);
+    const serm = res.perDirection.find((d) => d.key === "serm")!;
+    // Коммерческого нет — SERM по полной цене.
+    expect(serm.pricePerMonth).toEqual([825, 825]);
+    expect(serm.hoursPerMonth).toEqual([11, 11]);
+    const geo = res.perDirection.find((d) => d.key === "geo")!;
+    expect(geo.pricePerMonth).toEqual([]);
+    expect(geo.totalPrice).toBe(0);
   });
 
   it("обратная совместимость: старый included → все месяцы", () => {
@@ -216,6 +243,24 @@ describe("formatMonthRanges", () => {
     expect(formatMonthRanges([1, 2], 6)).toBe("мес. 1–2");
     expect(formatMonthRanges([1, 3, 5], 6)).toBe("мес. 1, 3, 5");
     expect(formatMonthRanges([1, 2, 4, 5, 6], 6)).toBe("мес. 1–2, 4–6");
+  });
+});
+
+describe("помесячные форматтеры (акцент КП — платёж за месяц)", () => {
+  // Ожидания строим через базовые форматтеры: в ru-RU разделитель групп —
+  // неразрывный пробел, литерал в тесте с ним не совпал бы.
+  it("одинаковые месяцы — одно число, разные — «от»", () => {
+    expect(formatMonthlyMoney([4713, 4713, 4713])).toBe(formatMoney(4713));
+    expect(formatMonthlyMoney([4713, 2134])).toBe(`от ${formatMoney(2134)}`);
+    expect(formatMonthlyAmount([4713, 2134])).toBe(`от ${formatAmount(2134)}`);
+    expect(formatMonthlyHours([62, 62])).toBe(formatHours(62));
+    expect(formatMonthlyHours([62, 28])).toBe(`от ${formatHours(28)}`);
+  });
+
+  it("нули (месяц без работ) не занижают платёж, пустой набор — прочерк", () => {
+    expect(formatMonthlyMoney([0, 4713, 4713])).toBe(formatMoney(4713));
+    expect(formatMonthlyMoney([])).toBe("—");
+    expect(formatMonthlyAmount([0])).toBe("—");
   });
 });
 

@@ -191,24 +191,28 @@ export function calculateSchedule(
 
   const perDirection: DirectionScheduleCalc[] = DIRECTION_ORDER.map((key) => {
     const activeMonths = activeByKey.get(key) ?? [];
-    let totalPrice = 0;
-    let totalFullPrice = 0;
-    let totalHours = 0;
+    const pricePerMonth: number[] = [];
+    const fullPricePerMonth: number[] = [];
+    const hoursPerMonth: number[] = [];
     for (const month of activeMonths) {
       const dc = months[month - 1].perDirection.find((p) => p.key === key);
       if (!dc) continue;
-      totalPrice += dc.monthlyPrice;
-      totalFullPrice += dc.fullMonthlyPrice;
-      totalHours += dc.monthlyHours;
+      pricePerMonth.push(dc.monthlyPrice);
+      fullPricePerMonth.push(dc.fullMonthlyPrice);
+      hoursPerMonth.push(dc.monthlyHours);
     }
+    const sum = (values: number[]) => values.reduce((s, v) => s + v, 0);
     return {
       key,
       name: DIRECTION_NAME[key],
       activeMonths,
       monthsLabel: formatMonthRanges(activeMonths, durationMonths),
-      totalPrice,
-      totalFullPrice,
-      totalHours,
+      pricePerMonth,
+      fullPricePerMonth,
+      hoursPerMonth,
+      totalPrice: sum(pricePerMonth),
+      totalFullPrice: sum(fullPricePerMonth),
+      totalHours: sum(hoursPerMonth),
     };
   });
 
