@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ManagersSyncSummary } from "@/lib/qmedia-managers";
 import type { Manager } from "@/lib/types";
 
@@ -25,6 +25,9 @@ export default function SettingsManagers({
   const [done, setDone] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [plan, setPlan] = useState<ManagersSyncSummary | null>(null);
+  // Отдельно от `error`: ошибки синхронизации показываются в модалке, иначе их
+  // не видно — кнопка синхронизации внизу, а общий блок ошибки вверху секции.
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   /** Любое изменение списка сразу уходит на сервер: список — единая настройка. */
   const persist = async (next: Manager[], message: string) => {
@@ -100,6 +103,7 @@ export default function SettingsManagers({
     setError(null);
     setDone(null);
     setPlan(null);
+    setSyncError(null);
     try {
       const res = await fetch("/api/settings/managers/sync", {
         cache: "no-store",
@@ -108,7 +112,9 @@ export default function SettingsManagers({
       if (!res.ok) throw new Error(data.error ?? `Ошибка сервера (${res.status})`);
       setPlan(data as ManagersSyncSummary);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось получить данные с сайта");
+      setSyncError(
+        e instanceof Error ? e.message : "Не удалось получить данные с сайта",
+      );
     } finally {
       setSyncing(false);
     }
@@ -117,7 +123,7 @@ export default function SettingsManagers({
   /** Шаг 2: применить. Сервер пересчитывает план заново по свежей странице. */
   const applySync = async () => {
     setSyncing(true);
-    setError(null);
+    setSyncError(null);
     try {
       const res = await fetch("/api/settings/managers/sync", { method: "POST" });
       const data = await res.json().catch(() => ({}));
@@ -126,11 +132,16 @@ export default function SettingsManagers({
       setManagers(s.managers);
       setEditing(null);
       setPlan(null);
+      setError(null);
       setDone(
         `Синхронизировано с qmedia.by: добавлено ${s.added.length}, обновлено ${s.updated.length}, удалено ${s.removed.length}.`,
       );
+      // Итог и обновлённый список — вверху секции, а кнопка синхронизации внизу.
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось применить синхронизацию");
+      setSyncError(
+        e instanceof Error ? e.message : "Не удалось применить синхронизацию",
+      );
     } finally {
       setSyncing(false);
     }
@@ -157,8 +168,6 @@ export default function SettingsManagers({
       {done && !error && (
         <div className="text-sm text-brand-greenDark font-medium">{done}</div>
       )}
-
-      {plan && <SyncPlan plan={plan} busy={syncing} onApply={applySync} onCancel={() => setPlan(null)} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {managers.map((m) =>
@@ -256,24 +265,56 @@ export default function SettingsManagers({
           {syncing ? "Смотрим сайт…" : "↻ Забрать с qmedia.by"}
         </button>
       </div>
+
+      {(plan || syncError) && (
+        <SyncPlan
+          plan={plan}
+          error={syncError}
+          busy={syncing}
+          onApply={applySync}
+          onCancel={() => {
+            setPlan(null);
+            setSyncError(null);
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Предпросмотр синхронизации: что изменится, если применить. */
+/**
+ * Предпросмотр синхронизации: что изменится, если применить.
+ *
+ * Именно модалка, а не блок в потоке страницы: кнопка «Забрать с qmedia.by»
+ * живёт под списком из десятка карточек, и панель наверху секции оказывалась
+ * за краем экрана — выглядело как «нажал, и ничего не произошло» (наступали).
+ */
 function SyncPlan({
   plan,
+  error,
   busy,
   onApply,
   onCancel,
 }: {
-  plan: ManagersSyncSummary;
+  plan: ManagersSyncSummary | null;
+  error: string | null;
   busy: boolean;
   onApply: () => void;
   onCancel: () => void;
 }) {
   const changed =
-    plan.added.length > 0 || plan.updated.length > 0 || plan.removed.length > 0;
+    !!plan &&
+    (plan.added.length > 0 ||
+      plan.updated.length > 0 ||
+      plan.removed.length > 0);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !busy) onCancel();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [busy, onCancel]);
 
   const group = (title: string, names: string[], className: string) =>
     names.length > 0 && (
@@ -286,51 +327,67 @@ function SyncPlan({
     );
 
   return (
-    <div className="rounded-2xl border border-brand-green/50 bg-white p-4 space-y-3">
-      <div className="font-bold text-sm uppercase tracking-wide text-brand-gray">
-        Данные с qmedia.by
-      </div>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={() => !busy && onCancel()}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Синхронизация с qmedia.by"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-2xl bg-white p-5 shadow-xl space-y-3"
+      >
+        <div className="font-bold text-sm uppercase tracking-wide text-brand-gray">
+          Данные с qmedia.by
+        </div>
 
-      {changed ? (
-        <div className="space-y-1.5">
-          {group("Добавить", plan.added, "text-brand-greenDark")}
-          {group("Обновить", plan.updated, "text-brand-ink")}
-          {group("Удалить", plan.removed, "text-red-600")}
-          {plan.unchanged.length > 0 && (
-            <div className="text-sm text-brand-gray">
-              Без изменений: {plan.unchanged.length}
-            </div>
-          )}
-          <div className="text-xs text-brand-gray pt-1">
-            Имя, специальность, телефон и email берутся с сайта; ручные правки
-            этих полей будут перезаписаны.
+        {error ? (
+          <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">
+            {error}
           </div>
-        </div>
-      ) : (
-        <div className="text-sm text-brand-gray">
-          Справочник уже совпадает с сайтом ({plan.unchanged.length} менеджеров).
-        </div>
-      )}
+        ) : !plan ? null : changed ? (
+          <div className="space-y-1.5">
+            {group("Добавить", plan.added, "text-brand-greenDark")}
+            {group("Обновить", plan.updated, "text-brand-ink")}
+            {group("Удалить", plan.removed, "text-red-600")}
+            {plan.unchanged.length > 0 && (
+              <div className="text-sm text-brand-gray">
+                Без изменений: {plan.unchanged.length}
+              </div>
+            )}
+            <div className="text-xs text-brand-gray pt-1">
+              Имя, специальность, телефон и email берутся с сайта; ручные правки
+              этих полей будут перезаписаны.
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-brand-gray">
+            Справочник уже совпадает с сайтом ({plan.unchanged.length}{" "}
+            менеджеров).
+          </div>
+        )}
 
-      <div className="flex gap-2 pt-1">
-        {changed && (
+        <div className="flex gap-2 pt-1">
+          {changed && (
+            <button
+              type="button"
+              onClick={onApply}
+              disabled={busy}
+              className="ui-btn-primary"
+            >
+              {busy ? "Применяем…" : "Применить"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={onApply}
+            onClick={onCancel}
             disabled={busy}
-            className="ui-btn-primary"
+            className="ui-btn-ghost"
           >
-            {busy ? "Применяем…" : "Применить"}
+            {changed ? "Отмена" : "Закрыть"}
           </button>
-        )}
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="ui-btn-ghost"
-        >
-          {changed ? "Отмена" : "Закрыть"}
-        </button>
+        </div>
       </div>
     </div>
   );
