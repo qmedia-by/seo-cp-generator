@@ -2,6 +2,7 @@
 // Драйвер `pg` через строку подключения DATABASE_URL — провайдеро-независимо.
 
 import { Pool } from "pg";
+import { runMigrations } from "./migrations";
 
 let pool: Pool | undefined;
 
@@ -33,35 +34,17 @@ export function getPool(): Pool {
 
 let schemaReady: Promise<void> | undefined;
 
-/** Идемпотентно создаёт таблицы при первом обращении (аналог прежнего ensureDir). */
+/**
+ * Прогоняет миграции при первом обращении к БД (отдельного шага деплоя нет,
+ * см. lib/migrations.ts). Результат кэшируется на процесс.
+ */
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    const pool = getPool();
-    schemaReady = pool
-      .query(
-        `CREATE TABLE IF NOT EXISTS proposals (
-           id         text PRIMARY KEY,
-           created_at timestamptz NOT NULL,
-           data       jsonb NOT NULL
-         )`,
-      )
-      // Настройки приложения (ключ → jsonb): 'calc' — параметры расчёта,
-      // 'managers' — справочник менеджеров. См. lib/settings.ts.
-      .then(() =>
-        pool.query(
-          `CREATE TABLE IF NOT EXISTS app_settings (
-             key        text PRIMARY KEY,
-             data       jsonb NOT NULL,
-             updated_at timestamptz NOT NULL DEFAULT now()
-           )`,
-        ),
-      )
-      .then(() => undefined)
-      .catch((err) => {
-        // Дать повторить попытку при следующем запросе, если БД была недоступна.
-        schemaReady = undefined;
-        throw err;
-      });
+    schemaReady = runMigrations(getPool()).catch((err) => {
+      // Дать повторить попытку при следующем запросе, если БД была недоступна.
+      schemaReady = undefined;
+      throw err;
+    });
   }
   return schemaReady;
 }

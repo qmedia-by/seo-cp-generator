@@ -1,7 +1,8 @@
 // Настройки приложения в Postgres: таблица app_settings(key, data jsonb, updated_at).
 //
-// Два ключа:
+// Три ключа:
 //   'calc'     — параметры расчёта (`CalcConfig`), см. lib/calc-config.ts;
+//   'works'    — списки работ по направлениям (`WorksConfig`), см. lib/works-config.ts;
 //   'managers' — справочник менеджеров для шага «Менеджер» в визарде.
 //
 // Пары функций `getX` / `getXOrDefault`: первые пробрасывают ошибку БД (нужны там,
@@ -12,9 +13,11 @@
 import { mergeCalcConfig, type CalcConfig } from "./calc-config";
 import { COMPANY } from "./company";
 import { ensureSchema, getPool } from "./db";
+import { mergeWorksConfig, type WorksConfig } from "./works-config";
 import type { Manager } from "./types";
 
 const CALC_KEY = "calc";
+const WORKS_KEY = "works";
 const MANAGERS_KEY = "managers";
 
 /** Менеджер по умолчанию — контакт из `lib/company.ts` (как было до настроек). */
@@ -72,6 +75,26 @@ export async function saveCalcConfig(config: CalcConfig): Promise<void> {
 export async function resetCalcConfig(): Promise<void> {
   await ensureSchema();
   await getPool().query(`DELETE FROM app_settings WHERE key = $1`, [CALC_KEY]);
+}
+
+// --- Списки работ по направлениям ---
+
+/** Актуальные списки работ. Отсутствующее/битое направление берёт список по умолчанию. */
+export async function getWorksConfig(): Promise<WorksConfig> {
+  return mergeWorksConfig(await readSetting(WORKS_KEY));
+}
+
+export async function getWorksConfigOrDefault(): Promise<WorksConfig> {
+  try {
+    return await getWorksConfig();
+  } catch (err) {
+    console.error("Не удалось прочитать списки работ:", err);
+    return mergeWorksConfig(null);
+  }
+}
+
+export async function saveWorksConfig(config: WorksConfig): Promise<void> {
+  await writeSetting(WORKS_KEY, config);
 }
 
 // --- Справочник менеджеров ---

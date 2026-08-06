@@ -7,8 +7,9 @@ import StepProject from "./StepProject";
 import StepDirections from "./StepDirections";
 import StepManager from "./StepManager";
 import StepReview from "./StepReview";
-import { WORKS_CATALOG } from "@/lib/works-catalog";
+import { buildWorksCatalog, type WorksConfig } from "@/lib/works-config";
 import type { CalcConfig } from "@/lib/calc-config";
+import type { DirectionCatalogEntry } from "@/lib/works-catalog";
 import type {
   DirectionSelection,
   Manager,
@@ -34,8 +35,12 @@ function allMonths(n: number): number[] {
   return Array.from({ length: n }, (_, i) => i + 1);
 }
 
-function initDirections(): DirectionSelection[] {
-  return WORKS_CATALOG.map((d) => ({
+/**
+ * Стартовый набор направлений: тексты работ копируются из каталога настроек —
+ * дальше КП живёт со своей копией, и правка настроек его уже не трогает.
+ */
+function initDirections(catalog: DirectionCatalogEntry[]): DirectionSelection[] {
+  return catalog.map((d) => ({
     key: d.key,
     name: d.name,
     goal: d.goal,
@@ -84,20 +89,28 @@ const toProposalManager = (m: Manager): ProposalManager => ({
 /**
  * `config` — снимок настроек расчёта, загруженный на сервере (app/new/page.tsx):
  * по нему считается предпросмотр, а сервер при сохранении применит те же значения.
- * `managers` — справочник для шага «Менеджер».
+ * `works` — заготовки работ по направлениям из настроек, `managers` — справочник
+ * для шага «Менеджер».
  */
 export default function Wizard({
   config,
+  works,
   managers,
 }: {
   config: CalcConfig;
+  works: WorksConfig;
   managers: Manager[];
 }) {
+  // Каталог фиксируется на время работы визарда: правка настроек в соседней
+  // вкладке не должна на лету менять уже размеченные работы.
+  const [catalog] = useState<DirectionCatalogEntry[]>(() =>
+    buildWorksCatalog(works),
+  );
   const [step, setStep] = useState(0);
   const [input, setInput] = useState<ProposalInput>(DEFAULT_INPUT);
   const [meta, setMeta] = useState<ProposalMeta>({});
-  const [directions, setDirections] = useState<DirectionSelection[]>(
-    initDirections,
+  const [directions, setDirections] = useState<DirectionSelection[]>(() =>
+    initDirections(catalog),
   );
   // По умолчанию — первый менеджер справочника (как раньше подставлялся COMPANY.manager).
   const [managerId, setManagerId] = useState<string | null>(
@@ -203,6 +216,7 @@ export default function Wizard({
           {step === 1 && (
             <StepDirections
               directions={directions}
+              catalog={catalog}
               durationMonths={input.durationMonths}
               onChange={changeDirections}
             />

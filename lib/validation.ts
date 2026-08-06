@@ -11,6 +11,7 @@ import {
   PROMOTE_TYPE_OPTIONS,
   REGION_OPTIONS,
 } from "./seo-config";
+import { MAX_WORKS_PER_DIRECTION, MAX_WORK_LENGTH } from "./works-config";
 
 const asEnum = <T extends string>(values: readonly T[]) =>
   z.enum(values as unknown as [T, ...T[]]);
@@ -47,7 +48,7 @@ export const inputSchema = z.object({
 });
 
 const workItemSchema = z.object({
-  text: z.string().trim().min(1).max(1000),
+  text: z.string().trim().min(1).max(MAX_WORK_LENGTH),
   custom: z.boolean().optional(),
 });
 
@@ -127,6 +128,13 @@ const directionRecord = <S extends z.ZodTypeAny>(value: S) =>
     serm: value,
     support: value,
   });
+
+/** Списки работ по направлениям (настройка «Работы направлений»). */
+export const worksConfigSchema = directionRecord(
+  z
+    .array(z.string().trim().min(1, "Работа не может быть пустой").max(MAX_WORK_LENGTH))
+    .max(MAX_WORKS_PER_DIRECTION),
+);
 
 export const calcConfigSchema = z.object({
   baseCost: priceNumber,

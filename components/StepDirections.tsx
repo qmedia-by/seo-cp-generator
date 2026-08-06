@@ -2,20 +2,24 @@
 
 import { useState } from "react";
 import { formatMonthRanges } from "@/lib/format";
-import { WORKS_CATALOG_BY_KEY } from "@/lib/works-catalog";
+import type { DirectionCatalogEntry } from "@/lib/works-catalog";
 import type { DirectionKey, DirectionSelection, WorkItem } from "@/lib/types";
 
 interface Props {
   directions: DirectionSelection[];
+  /** Заготовки работ из настроек — чекбоксы строятся по ним. */
+  catalog: DirectionCatalogEntry[];
   durationMonths: number;
   onChange: (next: DirectionSelection[]) => void;
 }
 
 export default function StepDirections({
   directions,
+  catalog,
   durationMonths,
   onChange,
 }: Props) {
+  const worksByKey = new Map(catalog.map((d) => [d.key, d.works]));
   const [expanded, setExpanded] = useState<string | null>(
     directions[0]?.key ?? null,
   );
@@ -122,7 +126,7 @@ export default function StepDirections({
 
       {/* Аккордеоны для выбора работ */}
       {directions.map((d) => {
-        const catalog = WORKS_CATALOG_BY_KEY[d.key].works;
+        const catalogWorks = worksByKey.get(d.key) ?? [];
         const checked = new Set(
           d.works.filter((w) => !w.custom).map((w) => w.text),
         );
@@ -136,7 +140,9 @@ export default function StepDirections({
           if (next.has(text)) next.delete(text);
           else next.add(text);
           const rebuilt: WorkItem[] = [
-            ...catalog.filter((t) => next.has(t)).map((t) => ({ text: t })),
+            ...catalogWorks
+              .filter((t) => next.has(t))
+              .map((t) => ({ text: t })),
             ...customWorks,
           ];
           updateDirection(d.key, { works: rebuilt });
@@ -183,7 +189,7 @@ export default function StepDirections({
 
             {isOpen && (
               <div className="border-t border-gray-200 p-4 space-y-2">
-                {catalog.map((text) => (
+                {catalogWorks.map((text) => (
                   <label
                     key={text}
                     className="flex gap-2 text-sm cursor-pointer hover:bg-gray-50 rounded p-1"

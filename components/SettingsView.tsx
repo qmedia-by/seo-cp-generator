@@ -4,11 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import SettingsCalc from "./SettingsCalc";
 import SettingsManagers from "./SettingsManagers";
+import SettingsWorks from "./SettingsWorks";
 import type { CalcConfig } from "@/lib/calc-config";
+import type { WorksConfig } from "@/lib/works-config";
 import type { Manager } from "@/lib/types";
 
 const TABS = [
   { id: "calc", label: "Данные для расчёта" },
+  { id: "works", label: "Работы направлений" },
   { id: "managers", label: "Список менеджеров" },
 ] as const;
 
@@ -16,9 +19,11 @@ type TabId = (typeof TABS)[number]["id"];
 
 export default function SettingsView({
   initialConfig,
+  initialWorks,
   initialManagers,
 }: {
   initialConfig: CalcConfig;
+  initialWorks: WorksConfig;
   initialManagers: Manager[];
 }) {
   const [tab, setTab] = useState<TabId>("calc");
@@ -29,7 +34,8 @@ export default function SettingsView({
         <div>
           <h2 className="text-lg font-bold">Настройки</h2>
           <p className="text-sm text-brand-gray">
-            Ставки, коэффициенты расчёта и справочник менеджеров.
+            Ставки и коэффициенты расчёта, заготовки работ по направлениям и
+            справочник менеджеров.
           </p>
         </div>
         <Link href="/" className="ui-btn-ghost">
@@ -54,9 +60,9 @@ export default function SettingsView({
         ))}
       </div>
 
-      {tab === "calc" ? (
-        <SettingsCalc initialConfig={initialConfig} />
-      ) : (
+      {tab === "calc" && <SettingsCalc initialConfig={initialConfig} />}
+      {tab === "works" && <SettingsWorks initialWorks={initialWorks} />}
+      {tab === "managers" && (
         <SettingsManagers initialManagers={initialManagers} />
       )}
     </div>
