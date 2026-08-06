@@ -15,6 +15,24 @@ import {
 const asEnum = <T extends string>(values: readonly T[]) =>
   z.enum(values as unknown as [T, ...T[]]);
 
+const directionKeySchema = z.enum([
+  "commercial",
+  "info",
+  "geo",
+  "serm",
+  "support",
+]);
+
+const coefficientKeySchema = z.enum([
+  "region",
+  "audience",
+  "pages",
+  "errors",
+  "experience",
+  "linkBuilding",
+  "competition",
+]);
+
 export const inputSchema = z.object({
   siteName: z.string().trim().min(1, "Укажите название сайта").max(200),
   region: asEnum(REGION_OPTIONS),
@@ -35,7 +53,7 @@ const workItemSchema = z.object({
 
 const directionSchema = z
   .object({
-    key: z.enum(["commercial", "info", "geo", "serm", "support"]),
+    key: directionKeySchema,
     name: z.string(),
     goal: z.string(),
     // Новый формат: помесячный набор активных месяцев.
@@ -55,11 +73,81 @@ const metaSchema = z.object({
   notes: z.string().trim().max(5000).optional(),
 });
 
+/** Контакты менеджера в КП. Обязательно только имя — остальное можно не заполнять. */
+export const proposalManagerSchema = z.object({
+  name: z.string().trim().min(1, "Укажите имя и фамилию").max(120),
+  role: z.string().trim().max(120).default(""),
+  phone: z.string().trim().max(60).default(""),
+  email: z.string().trim().max(120).default(""),
+});
+
+/** Менеджер в справочнике настроек. */
+export const managerSchema = proposalManagerSchema.extend({
+  id: z.string().trim().min(1).max(64),
+});
+
+export const managersSchema = z.array(managerSchema).max(50);
+
 /** Тело запроса на создание/импорт КП (id/createdAt/calc считаются на сервере). */
 export const createProposalSchema = z.object({
   input: inputSchema,
   directions: z.array(directionSchema).min(1).max(5),
   meta: metaSchema.optional(),
+  manager: proposalManagerSchema.optional(),
 });
 
 export type CreateProposalPayload = z.infer<typeof createProposalSchema>;
+
+// --- Настройки расчёта ---
+
+const positiveNumber = z
+  .number({ invalid_type_error: "Нужно число" })
+  .finite()
+  .positive("Значение должно быть больше нуля");
+
+/** Коэффициент: положительное число в разумных пределах. */
+const coefNumber = positiveNumber.max(1000);
+/** Денежная величина (базовая стоимость, ставка часа). */
+const priceNumber = positiveNumber.max(1_000_000);
+
+/** Таблица «вариант → коэффициент»: требуются все варианты из списка опций. */
+const coefTableSchema = <T extends string>(values: readonly T[]) =>
+  z.object(
+    Object.fromEntries(values.map((v) => [v, coefNumber])) as Record<
+      T,
+      typeof coefNumber
+    >,
+  );
+
+const directionRecord = <S extends z.ZodTypeAny>(value: S) =>
+  z.object({
+    commercial: value,
+    info: value,
+    geo: value,
+    serm: value,
+    support: value,
+  });
+
+export const calcConfigSchema = z.object({
+  baseCost: priceNumber,
+  hourRate: priceNumber,
+  directionCoef: directionRecord(coefNumber),
+  directionCoefficients: directionRecord(z.array(coefficientKeySchema)),
+  bundle: z.object({
+    trigger: directionKeySchema,
+    discounted: z.array(directionKeySchema),
+    rate: z
+      .number({ invalid_type_error: "Нужно число" })
+      .min(0, "Скидка не может быть отрицательной")
+      .lt(1, "Скидка должна быть меньше 100%"),
+  }),
+  coef: z.object({
+    region: coefTableSchema(REGION_OPTIONS),
+    audience: coefTableSchema(AUDIENCE_OPTIONS),
+    pages: coefTableSchema(PAGES_OPTIONS),
+    errors: coefTableSchema(ERRORS_OPTIONS),
+    experience: coefTableSchema(EXPERIENCE_OPTIONS),
+    linkBuilding: coefTableSchema(LINK_BUILDING_OPTIONS),
+    competition: coefTableSchema(COMPETITION_OPTIONS),
+  }),
+});

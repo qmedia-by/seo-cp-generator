@@ -33,16 +33,28 @@ export function getPool(): Pool {
 
 let schemaReady: Promise<void> | undefined;
 
-/** Идемпотентно создаёт таблицу при первом обращении (аналог прежнего ensureDir). */
+/** Идемпотентно создаёт таблицы при первом обращении (аналог прежнего ensureDir). */
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
-    schemaReady = getPool()
+    const pool = getPool();
+    schemaReady = pool
       .query(
         `CREATE TABLE IF NOT EXISTS proposals (
            id         text PRIMARY KEY,
            created_at timestamptz NOT NULL,
            data       jsonb NOT NULL
          )`,
+      )
+      // Настройки приложения (ключ → jsonb): 'calc' — параметры расчёта,
+      // 'managers' — справочник менеджеров. См. lib/settings.ts.
+      .then(() =>
+        pool.query(
+          `CREATE TABLE IF NOT EXISTS app_settings (
+             key        text PRIMARY KEY,
+             data       jsonb NOT NULL,
+             updated_at timestamptz NOT NULL DEFAULT now()
+           )`,
+        ),
       )
       .then(() => undefined)
       .catch((err) => {

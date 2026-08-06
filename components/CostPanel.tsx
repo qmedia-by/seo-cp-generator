@@ -2,19 +2,22 @@
 
 import { useMemo } from "react";
 import { calculateSchedule } from "@/lib/calc";
+import type { CalcConfig } from "@/lib/calc-config";
 import { formatHours, formatMoney, pluralMonths } from "@/lib/format";
 import type { DirectionSelection, ProposalInput } from "@/lib/types";
 
 export default function CostPanel({
   input,
   directions,
+  config,
 }: {
   input: ProposalInput;
   directions: DirectionSelection[];
+  config: CalcConfig;
 }) {
   const calc = useMemo(
-    () => calculateSchedule(input, directions),
-    [input, directions],
+    () => calculateSchedule(input, directions, config),
+    [input, directions, config],
   );
 
   return (

@@ -1,10 +1,12 @@
 "use client";
 
 import { calculateSchedule } from "@/lib/calc";
+import type { CalcConfig } from "@/lib/calc-config";
 import { formatHours, formatMoney } from "@/lib/format";
 import type {
   DirectionSelection,
   ProposalInput,
+  ProposalManager,
   ProposalMeta,
 } from "@/lib/types";
 
@@ -12,6 +14,8 @@ interface Props {
   input: ProposalInput;
   directions: DirectionSelection[];
   meta: ProposalMeta;
+  manager: ProposalManager;
+  config: CalcConfig;
   savedId: string | null;
   saving: boolean;
   error: string | null;
@@ -22,12 +26,14 @@ export default function StepReview({
   input,
   directions,
   meta,
+  manager,
+  config,
   savedId,
   saving,
   error,
   onSave,
 }: Props) {
-  const calc = calculateSchedule(input, directions);
+  const calc = calculateSchedule(input, directions, config);
   const byKey = Object.fromEntries(calc.perDirection.map((d) => [d.key, d]));
   const months = calc.months.map((m) => m.month);
 
@@ -202,6 +208,29 @@ export default function StepReview({
             );
           })}
         </div>
+      </div>
+
+      {/* Кто указан в КП: обложка PDF и блок контактов */}
+      <div>
+        <h3 className="text-sm font-bold uppercase tracking-wide text-brand-gray mb-2">
+          Менеджер
+        </h3>
+        {manager.name.trim() ? (
+          <div className="text-sm">
+            <span className="font-semibold">{manager.name}</span>
+            {manager.role && (
+              <span className="text-brand-gray"> · {manager.role}</span>
+            )}
+            <div className="text-brand-gray">
+              {[manager.phone, manager.email].filter(Boolean).join(" · ") ||
+                "контакты не указаны"}
+            </div>
+          </div>
+        ) : (
+          <div className="text-sm text-brand-gray">
+            Не указан — в КП попадут контакты по умолчанию.
+          </div>
+        )}
       </div>
 
       {meta.notes && (

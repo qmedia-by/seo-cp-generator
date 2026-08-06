@@ -22,6 +22,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 import { calculateSchedule } from "../calc";
+import { mergeCalcConfig } from "../calc-config";
 import { ADVANTAGES, BRAND, COMPANY, PHOTOS } from "../company";
 import {
   formatAmount,
@@ -695,7 +696,15 @@ function Slide({
 
 export function ProposalDocument({ proposal }: { proposal: Proposal }) {
   const { input, directions, meta } = proposal;
-  const calc = calculateSchedule(input, directions);
+  // Считаем по снимку настроек этого КП: правка коэффициентов в «Настройках»
+  // не должна менять цифры уже отправленного клиенту предложения.
+  const calc = calculateSchedule(
+    input,
+    directions,
+    mergeCalcConfig(proposal.calcConfig),
+  );
+  // Менеджер КП; у старых КП его нет — показываем контакт по умолчанию.
+  const manager = proposal.manager?.name ? proposal.manager : COMPANY.manager;
   const calcByKey = Object.fromEntries(calc.perDirection.map((d) => [d.key, d]));
   const term = pluralMonths(calc.durationMonths);
   const clientLabel = meta?.clientName || input.siteName;
@@ -761,12 +770,18 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
 
         <View style={s.coverContacts}>
           <Text style={s.coverPrepared}>Подготовил:</Text>
-          <Text style={s.coverPreparedName}>{COMPANY.manager.name}</Text>
-          <Text style={s.coverContactLine}>{COMPANY.manager.role}</Text>
-          <Text style={[s.coverContactLine, { marginTop: 8 }]}>
-            {COMPANY.manager.phone}
-          </Text>
-          <Text style={s.coverContactLine}>{COMPANY.manager.email}</Text>
+          <Text style={s.coverPreparedName}>{manager.name}</Text>
+          {!!manager.role && (
+            <Text style={s.coverContactLine}>{manager.role}</Text>
+          )}
+          {!!manager.phone && (
+            <Text style={[s.coverContactLine, { marginTop: 8 }]}>
+              {manager.phone}
+            </Text>
+          )}
+          {!!manager.email && (
+            <Text style={s.coverContactLine}>{manager.email}</Text>
+          )}
           <Text style={s.coverSite}>{COMPANY.site}</Text>
         </View>
       </Page>
@@ -1245,12 +1260,16 @@ export function ProposalDocument({ proposal }: { proposal: Proposal }) {
 
         <View style={s.contacts} wrap={false}>
           <View>
-            <Text style={s.contactName}>{COMPANY.manager.name}</Text>
-            <Text style={s.contactLine}>{COMPANY.manager.role}</Text>
+            <Text style={s.contactName}>{manager.name}</Text>
+            {!!manager.role && <Text style={s.contactLine}>{manager.role}</Text>}
           </View>
           <View>
-            <Text style={s.contactLine}>{COMPANY.manager.phone}</Text>
-            <Text style={s.contactLine}>{COMPANY.manager.email}</Text>
+            {!!manager.phone && (
+              <Text style={s.contactLine}>{manager.phone}</Text>
+            )}
+            {!!manager.email && (
+              <Text style={s.contactLine}>{manager.email}</Text>
+            )}
             <Text style={[s.contactLine, { color: BRAND.greenDark, fontWeight: 700 }]}>
               {COMPANY.site}
             </Text>

@@ -3,20 +3,9 @@
 
 import ExcelJS from "exceljs";
 import { calculateSchedule } from "../calc";
+import { mergeCalcConfig } from "../calc-config";
 import { BRAND, COMPANY } from "../company";
-import {
-  AUDIENCE_COEF,
-  BASE_COST,
-  COMPETITION_COEF,
-  CURRENCY,
-  DIRECTION_COEF,
-  ERRORS_COEF,
-  EXPERIENCE_COEF,
-  HOUR_RATE,
-  LINK_BUILDING_COEF,
-  PAGES_COEF,
-  REGION_COEF,
-} from "../seo-config";
+import { CURRENCY } from "../seo-config";
 import type { Proposal } from "../types";
 
 // Фирстиль Qmedia: зелёный — основной (шапки/секции), жёлтый — акцент (итог).
@@ -51,7 +40,10 @@ function sectionRow(ws: ExcelJS.Worksheet, label: string) {
 
 export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   const { input, directions } = proposal;
-  const calc = calculateSchedule(input, directions);
+  // Ставки и коэффициенты берём из снимка настроек этого КП (см. Proposal.calcConfig),
+  // чтобы Excel и PDF одного КП всегда сходились между собой.
+  const cfg = mergeCalcConfig(proposal.calcConfig);
+  const calc = calculateSchedule(input, directions, cfg);
   const money = `# ##0.00 "${CURRENCY}"`;
   const monthNums = calc.months.map((m) => m.month);
 
@@ -82,6 +74,15 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   ws.addRow(["Дата:", new Date(proposal.createdAt).toLocaleString("ru-RU")]);
   if (proposal.meta?.clientName)
     ws.addRow(["Клиент:", proposal.meta.clientName]);
+  const manager = proposal.manager?.name ? proposal.manager : COMPANY.manager;
+  ws.addRow([
+    "Менеджер:",
+    [manager.name, manager.role].filter(Boolean).join(" · "),
+  ]);
+  const managerContacts = [manager.phone, manager.email]
+    .filter(Boolean)
+    .join(" · ");
+  if (managerContacts) ws.addRow(["Контакты:", managerContacts]);
   ws.addRow([]);
 
   // Базовые ставки и коэффициенты параметров
@@ -91,27 +92,27 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     if (col <= 3) headerFill(c);
   });
 
-  ws.addRow(["Базовая стоимость SEO", BASE_COST, ""]);
-  ws.addRow(["Стоимость часа", HOUR_RATE, ""]);
-  ws.addRow(["Регион", input.region, REGION_COEF[input.region]]);
-  ws.addRow(["Для кого", input.audience, AUDIENCE_COEF[input.audience]]);
+  ws.addRow(["Базовая стоимость SEO", cfg.baseCost, ""]);
+  ws.addRow(["Стоимость часа", cfg.hourRate, ""]);
+  ws.addRow(["Регион", input.region, cfg.coef.region[input.region]]);
+  ws.addRow(["Для кого", input.audience, cfg.coef.audience[input.audience]]);
   ws.addRow(["Что продвигаем", input.promoteType, "—"]);
-  ws.addRow(["Количество страниц", input.pages, PAGES_COEF[input.pages]]);
-  ws.addRow(["Наличие ошибок", input.errors, ERRORS_COEF[input.errors]]);
+  ws.addRow(["Количество страниц", input.pages, cfg.coef.pages[input.pages]]);
+  ws.addRow(["Наличие ошибок", input.errors, cfg.coef.errors[input.errors]]);
   ws.addRow([
     "Предыдущий опыт",
     input.experience,
-    EXPERIENCE_COEF[input.experience],
+    cfg.coef.experience[input.experience],
   ]);
   ws.addRow([
     "Ссылочное продвижение",
     input.linkBuilding,
-    LINK_BUILDING_COEF[input.linkBuilding],
+    cfg.coef.linkBuilding[input.linkBuilding],
   ]);
   ws.addRow([
     "Конкуренция",
     input.competition,
-    COMPETITION_COEF[input.competition],
+    cfg.coef.competition[input.competition],
   ]);
   ws.addRow(["Срок продвижения", `${input.durationMonths} мес`, "—"]);
   ws.addRow([]);
@@ -137,7 +138,7 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     const row = ws.addRow([
       d.name,
       included ? d.monthsLabel : "не входит",
-      DIRECTION_COEF[d.key],
+      cfg.directionCoef[d.key],
       included ? d.totalFullPrice : 0,
       discount,
       included ? d.totalPrice : 0,

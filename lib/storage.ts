@@ -1,6 +1,7 @@
 // Хранилище КП в Postgres (Neon/Supabase): таблица proposals(id, created_at, data jsonb).
 
 import { calculateSchedule, normalizeActiveMonths } from "./calc";
+import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc-config";
 import { ensureSchema, getPool } from "./db";
 import type { CreateProposalPayload } from "./validation";
 import type { DirectionSelection, Proposal } from "./types";
@@ -8,8 +9,15 @@ import type { DirectionSelection, Proposal } from "./types";
 /** id состоит только из hex/дефисов (как у crypto.randomUUID). Некорректный → «не найдено». */
 const ID_RE = /^[a-f0-9-]{8,64}$/i;
 
-/** Собрать Proposal из входных данных: посчитать снимок расчёта, выдать id и дату. */
-export function buildProposal(payload: CreateProposalPayload): Proposal {
+/**
+ * Собрать Proposal из входных данных: посчитать снимок расчёта, выдать id и дату.
+ * `config` — актуальные настройки расчёта (`getCalcConfig()`); они же кладутся
+ * в КП снимком, чтобы позднейшая правка настроек не меняла это КП.
+ */
+export function buildProposal(
+  payload: CreateProposalPayload,
+  config: CalcConfig = DEFAULT_CALC_CONFIG,
+): Proposal {
   // Нормализуем направления в новый формат (activeMonths) — в т.ч. из старого
   // `included` при импорте ранее сохранённого JSON.
   const directions: DirectionSelection[] = payload.directions.map((d) => ({
@@ -19,14 +27,16 @@ export function buildProposal(payload: CreateProposalPayload): Proposal {
     activeMonths: normalizeActiveMonths(d, payload.input.durationMonths),
     works: d.works,
   }));
-  const calcSnapshot = calculateSchedule(payload.input, directions);
+  const calcSnapshot = calculateSchedule(payload.input, directions, config);
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     input: payload.input,
     directions,
     meta: payload.meta,
+    manager: payload.manager,
     calcSnapshot,
+    calcConfig: config,
   };
 }
 

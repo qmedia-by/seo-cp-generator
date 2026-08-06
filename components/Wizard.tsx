@@ -5,11 +5,15 @@ import Link from "next/link";
 import CostPanel from "./CostPanel";
 import StepProject from "./StepProject";
 import StepDirections from "./StepDirections";
+import StepManager from "./StepManager";
 import StepReview from "./StepReview";
 import { WORKS_CATALOG } from "@/lib/works-catalog";
+import type { CalcConfig } from "@/lib/calc-config";
 import type {
   DirectionSelection,
+  Manager,
   ProposalInput,
+  ProposalManager,
   ProposalMeta,
 } from "@/lib/types";
 
@@ -61,14 +65,46 @@ function remapMonths(
   return [...current, ...extra];
 }
 
-const STEPS = ["Параметры", "Направления", "Генерация"];
+const STEPS = ["Параметры", "Направления", "Менеджер", "Генерация"];
 
-export default function Wizard() {
+const EMPTY_MANAGER: ProposalManager = {
+  name: "",
+  role: "",
+  phone: "",
+  email: "",
+};
+
+const toProposalManager = (m: Manager): ProposalManager => ({
+  name: m.name,
+  role: m.role,
+  phone: m.phone,
+  email: m.email,
+});
+
+/**
+ * `config` — снимок настроек расчёта, загруженный на сервере (app/new/page.tsx):
+ * по нему считается предпросмотр, а сервер при сохранении применит те же значения.
+ * `managers` — справочник для шага «Менеджер».
+ */
+export default function Wizard({
+  config,
+  managers,
+}: {
+  config: CalcConfig;
+  managers: Manager[];
+}) {
   const [step, setStep] = useState(0);
   const [input, setInput] = useState<ProposalInput>(DEFAULT_INPUT);
   const [meta, setMeta] = useState<ProposalMeta>({});
   const [directions, setDirections] = useState<DirectionSelection[]>(
     initDirections,
+  );
+  // По умолчанию — первый менеджер справочника (как раньше подставлялся COMPANY.manager).
+  const [managerId, setManagerId] = useState<string | null>(
+    managers[0]?.id ?? null,
+  );
+  const [manager, setManager] = useState<ProposalManager>(() =>
+    managers[0] ? toProposalManager(managers[0]) : EMPTY_MANAGER,
   );
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -100,6 +136,18 @@ export default function Wizard() {
     setDirections(next);
     setSavedId(null);
   };
+  /** Выбор из справочника; null — «не указывать» (в КП пойдут контакты по умолчанию). */
+  const selectManager = (m: Manager | null) => {
+    setManagerId(m?.id ?? null);
+    setManager(m ? toProposalManager(m) : EMPTY_MANAGER);
+    setSavedId(null);
+  };
+  // Ручная правка отвязывает от справочника: данные касаются только этого КП.
+  const patchManager = (patch: Partial<ProposalManager>) => {
+    setManager((s) => ({ ...s, ...patch }));
+    setManagerId(null);
+    setSavedId(null);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -108,7 +156,13 @@ export default function Wizard() {
       const res = await fetch("/api/proposals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, directions, meta }),
+        body: JSON.stringify({
+          input,
+          directions,
+          meta,
+          // Менеджер без имени = не указан: PDF подставит контакты по умолчанию.
+          manager: manager.name.trim() ? manager : undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -154,10 +208,21 @@ export default function Wizard() {
             />
           )}
           {step === 2 && (
+            <StepManager
+              managers={managers}
+              manager={manager}
+              managerId={managerId}
+              onSelect={selectManager}
+              onPatch={patchManager}
+            />
+          )}
+          {step === 3 && (
             <StepReview
               input={input}
               directions={directions}
               meta={meta}
+              manager={manager}
+              config={config}
               savedId={savedId}
               saving={saving}
               error={error}
@@ -186,7 +251,7 @@ export default function Wizard() {
           </div>
         </div>
 
-        <CostPanel input={input} directions={directions} />
+        <CostPanel input={input} directions={directions} config={config} />
       </div>
     </div>
   );

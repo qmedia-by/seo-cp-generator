@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
+import { getCalcConfig } from "@/lib/settings";
 import { buildProposal, saveProposal } from "@/lib/storage";
 import { createProposalSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Импорт ранее сохранённого JSON: берём только input/directions/meta,
+// Импорт ранее сохранённого JSON: берём только input/directions/meta/manager,
 // заново считаем расчёт и сохраняем как новое КП (новый id и дата).
+// Расчёт идёт по ТЕКУЩИМ настройкам, а не по снимку из файла — это штатный
+// способ пересчитать старое КП после правки коэффициентов.
 export async function POST(req: Request) {
   let body: unknown;
   try {
@@ -26,7 +29,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const proposal = buildProposal(parsed.data);
+  const proposal = buildProposal(parsed.data, await getCalcConfig());
   await saveProposal(proposal);
   return NextResponse.json(proposal, { status: 201 });
 }

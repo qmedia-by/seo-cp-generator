@@ -1,22 +1,11 @@
 // Ядро расчёта стоимости КП. Чистая функция, повторяющая логику Расчет SEO.xlsx.
+//
+// Ставки и коэффициенты приходят параметром `config` (по умолчанию —
+// `DEFAULT_CALC_CONFIG`, т.е. значения из Excel). Актуальный конфиг администратор
+// правит в «Настройках»; сохранённое КП хранит его снимок — см. lib/calc-config.ts.
 
-import {
-  AUDIENCE_COEF,
-  BASE_COST,
-  COMMERCIAL_BUNDLE,
-  COMPETITION_COEF,
-  CURRENCY,
-  DIRECTION_COEF,
-  DIRECTION_COEFFICIENTS,
-  DIRECTION_NAME,
-  DIRECTION_ORDER,
-  ERRORS_COEF,
-  EXPERIENCE_COEF,
-  HOUR_RATE,
-  LINK_BUILDING_COEF,
-  PAGES_COEF,
-  REGION_COEF,
-} from "./seo-config";
+import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc-config";
+import { CURRENCY, DIRECTION_NAME, DIRECTION_ORDER } from "./seo-config";
 import { formatMonthRanges } from "./format";
 import type {
   CalcResult,
@@ -30,23 +19,15 @@ import type {
 } from "./types";
 
 /** Значение одного коэффициента для заданных входных данных. */
-function coefValue(key: CoefficientKey, input: ProposalInput): number {
-  switch (key) {
-    case "region":
-      return REGION_COEF[input.region];
-    case "audience":
-      return AUDIENCE_COEF[input.audience];
-    case "pages":
-      return PAGES_COEF[input.pages];
-    case "errors":
-      return ERRORS_COEF[input.errors];
-    case "experience":
-      return EXPERIENCE_COEF[input.experience];
-    case "linkBuilding":
-      return LINK_BUILDING_COEF[input.linkBuilding];
-    case "competition":
-      return COMPETITION_COEF[input.competition];
-  }
+function coefValue(
+  key: CoefficientKey,
+  input: ProposalInput,
+  config: CalcConfig,
+): number {
+  // Имена коэффициентов совпадают с именами полей ProposalInput (region → input.region),
+  // поэтому таблица и значение берутся по одному и тому же ключу.
+  const table = config.coef[key] as Record<string, number>;
+  return table?.[input[key]] ?? 1;
 }
 
 /** Стоимость направления за месяц (BYN). 0 — если направление выключено. */
@@ -54,18 +35,22 @@ export function directionMonthlyPrice(
   key: DirectionKey,
   input: ProposalInput,
   included: boolean,
+  config: CalcConfig = DEFAULT_CALC_CONFIG,
 ): number {
   if (!included) return 0;
-  let price = BASE_COST * DIRECTION_COEF[key];
-  for (const coef of DIRECTION_COEFFICIENTS[key]) {
-    price *= coefValue(coef, input);
+  let price = config.baseCost * config.directionCoef[key];
+  for (const coef of config.directionCoefficients[key]) {
+    price *= coefValue(coef, input, config);
   }
   return Math.round(price);
 }
 
 /** Часы из стоимости — как в Excel: ROUND(цена / ставка). */
-export function priceToHours(price: number): number {
-  return Math.round(price / HOUR_RATE);
+export function priceToHours(
+  price: number,
+  hourRate: number = DEFAULT_CALC_CONFIG.hourRate,
+): number {
+  return Math.round(price / hourRate);
 }
 
 /**
@@ -73,26 +58,27 @@ export function priceToHours(price: number): number {
  * `directions` — любой массив объектов с полями key/included (DirectionSelection подходит).
  * Итог за месяц = сумма по включённым; итог за срок = месячный × durationMonths.
  *
- * Пакетная скидка (COMMERCIAL_BUNDLE): если включено направление-триггер
- * (Коммерческое SEO), включённые GEO и SERM считаются со скидкой 30%. Часы
- * следуют из цены со скидкой (как и везде в модели: часы = round(цена / ставка)).
+ * Пакетная скидка (`config.bundle`): если включено направление-триггер
+ * (по умолчанию Коммерческое SEO), включённые GEO и SERM считаются со скидкой 30%.
+ * Часы следуют из цены со скидкой (как и везде в модели: часы = round(цена / ставка)).
  */
 export function calculate(
   input: ProposalInput,
   directions: { key: DirectionKey; included: boolean }[],
+  config: CalcConfig = DEFAULT_CALC_CONFIG,
 ): CalcResult {
   const includedByKey = new Map<DirectionKey, boolean>(
     directions.map((d) => [d.key, d.included]),
   );
 
-  const bundleActive = includedByKey.get(COMMERCIAL_BUNDLE.trigger) ?? false;
+  const bundleActive = includedByKey.get(config.bundle.trigger) ?? false;
 
   const perDirection: DirectionCalc[] = DIRECTION_ORDER.map((key) => {
     const included = includedByKey.get(key) ?? false;
-    const fullMonthlyPrice = directionMonthlyPrice(key, input, included);
+    const fullMonthlyPrice = directionMonthlyPrice(key, input, included, config);
     const discountRate =
-      included && bundleActive && COMMERCIAL_BUNDLE.discounted.includes(key)
-        ? COMMERCIAL_BUNDLE.rate
+      included && bundleActive && config.bundle.discounted.includes(key)
+        ? config.bundle.rate
         : 0;
     const monthlyPrice =
       discountRate > 0
@@ -105,7 +91,7 @@ export function calculate(
       fullMonthlyPrice,
       discountRate,
       monthlyPrice,
-      monthlyHours: included ? priceToHours(monthlyPrice) : 0,
+      monthlyHours: included ? priceToHours(monthlyPrice, config.hourRate) : 0,
     };
   });
 
@@ -166,6 +152,7 @@ export function normalizeActiveMonths(
 export function calculateSchedule(
   input: ProposalInput,
   directions: { key: DirectionKey; activeMonths?: number[]; included?: boolean }[],
+  config: CalcConfig = DEFAULT_CALC_CONFIG,
 ): ScheduleResult {
   const durationMonths = input.durationMonths;
   const activeByKey = new Map<DirectionKey, number[]>(
@@ -178,7 +165,7 @@ export function calculateSchedule(
       key,
       included: (activeByKey.get(key) ?? []).includes(month),
     }));
-    const m = calculate(input, sel);
+    const m = calculate(input, sel, config);
     months.push({
       month,
       perDirection: m.perDirection,

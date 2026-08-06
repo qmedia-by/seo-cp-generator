@@ -89,6 +89,21 @@ export interface ProposalMeta {
   notes?: string;
 }
 
+/** Контакты менеджера, которые попадают в КП (обложка PDF и слайд контактов). */
+export interface ProposalManager {
+  /** Имя Фамилия. */
+  name: string;
+  /** Специальность («IT Account-менеджер Qmedia»). */
+  role: string;
+  phone: string;
+  email: string;
+}
+
+/** Менеджер из справочника настроек (тот же набор полей + идентификатор). */
+export interface Manager extends ProposalManager {
+  id: string;
+}
+
 /** Результат расчёта по одному направлению. */
 export interface DirectionCalc {
   key: DirectionKey;
@@ -184,6 +199,16 @@ export interface Proposal {
   input: ProposalInput;
   directions: DirectionSelection[];
   meta?: ProposalMeta;
+  /** Менеджер, ведущий это КП. Нет — берутся контакты по умолчанию (COMPANY.manager). */
+  manager?: ProposalManager;
   /** Снимок расчёта на момент сохранения (для истории). */
   calcSnapshot: ScheduleResult;
+  /**
+   * Снимок настроек расчёта на момент сохранения. PDF/Excel пересчитывают КП
+   * именно по нему, поэтому правка настроек не меняет уже отправленные КП.
+   * Нет (старые КП) — берутся значения по умолчанию из `DEFAULT_CALC_CONFIG`.
+   * Типизирован как `unknown`, чтобы `types.ts` не зависел от `calc-config.ts`;
+   * потребители пропускают через `mergeCalcConfig`.
+   */
+  calcConfig?: unknown;
 }
