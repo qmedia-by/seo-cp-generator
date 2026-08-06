@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { ManagersSyncSummary } from "@/lib/qmedia-managers";
 import type { Manager } from "@/lib/types";
 
 /** Пустая форма нового менеджера. */
@@ -22,6 +23,8 @@ export default function SettingsManagers({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [plan, setPlan] = useState<ManagersSyncSummary | null>(null);
 
   /** Любое изменение списка сразу уходит на сервер: список — единая настройка. */
   const persist = async (next: Manager[], message: string) => {
@@ -91,6 +94,48 @@ export default function SettingsManagers({
     );
   };
 
+  /** Шаг 1: спросить сайт и показать, что изменится (ничего не сохраняя). */
+  const previewSync = async () => {
+    setSyncing(true);
+    setError(null);
+    setDone(null);
+    setPlan(null);
+    try {
+      const res = await fetch("/api/settings/managers/sync", {
+        cache: "no-store",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Ошибка сервера (${res.status})`);
+      setPlan(data as ManagersSyncSummary);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось получить данные с сайта");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  /** Шаг 2: применить. Сервер пересчитывает план заново по свежей странице. */
+  const applySync = async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings/managers/sync", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Ошибка сервера (${res.status})`);
+      const s = data as ManagersSyncSummary & { managers: Manager[] };
+      setManagers(s.managers);
+      setEditing(null);
+      setPlan(null);
+      setDone(
+        `Синхронизировано с qmedia.by: добавлено ${s.added.length}, обновлено ${s.updated.length}, удалено ${s.removed.length}.`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось применить синхронизацию");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="ui-note">
@@ -98,6 +143,10 @@ export default function SettingsManagers({
         Выбранные контакты попадают на обложку PDF («Подготовил») и в блок
         контактов в конце презентации. В уже сохранённых КП остаются те данные,
         которые были выбраны при их создании.
+        <br />
+        Кнопка <b>«Забрать с qmedia.by»</b> сверяет список с блоком
+        «Персональные менеджеры» на сайте: сайт — главный источник, лишние
+        удаляются, недостающие добавляются. Сначала покажем, что изменится.
       </div>
 
       {error && (
@@ -108,6 +157,8 @@ export default function SettingsManagers({
       {done && !error && (
         <div className="text-sm text-brand-greenDark font-medium">{done}</div>
       )}
+
+      {plan && <SyncPlan plan={plan} busy={syncing} onApply={applySync} onCancel={() => setPlan(null)} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {managers.map((m) =>
@@ -184,16 +235,103 @@ export default function SettingsManagers({
         </div>
       )}
 
-      {editing !== "new" && (
+      <div className="flex flex-wrap items-center gap-2">
+        {editing !== "new" && (
+          <button
+            type="button"
+            onClick={startAdd}
+            disabled={saving || syncing}
+            className="ui-btn-primary"
+          >
+            + Добавить менеджера
+          </button>
+        )}
         <button
           type="button"
-          onClick={startAdd}
-          disabled={saving}
-          className="ui-btn-primary"
+          onClick={previewSync}
+          disabled={saving || syncing}
+          className="ui-btn-ghost"
+          title="Сверить справочник с блоком «Персональные менеджеры» на qmedia.by"
         >
-          + Добавить менеджера
+          {syncing ? "Смотрим сайт…" : "↻ Забрать с qmedia.by"}
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** Предпросмотр синхронизации: что изменится, если применить. */
+function SyncPlan({
+  plan,
+  busy,
+  onApply,
+  onCancel,
+}: {
+  plan: ManagersSyncSummary;
+  busy: boolean;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const changed =
+    plan.added.length > 0 || plan.updated.length > 0 || plan.removed.length > 0;
+
+  const group = (title: string, names: string[], className: string) =>
+    names.length > 0 && (
+      <div className="text-sm">
+        <span className={`font-semibold ${className}`}>
+          {title} ({names.length}):
+        </span>{" "}
+        {names.join(", ")}
+      </div>
+    );
+
+  return (
+    <div className="rounded-2xl border border-brand-green/50 bg-white p-4 space-y-3">
+      <div className="font-bold text-sm uppercase tracking-wide text-brand-gray">
+        Данные с qmedia.by
+      </div>
+
+      {changed ? (
+        <div className="space-y-1.5">
+          {group("Добавить", plan.added, "text-brand-greenDark")}
+          {group("Обновить", plan.updated, "text-brand-ink")}
+          {group("Удалить", plan.removed, "text-red-600")}
+          {plan.unchanged.length > 0 && (
+            <div className="text-sm text-brand-gray">
+              Без изменений: {plan.unchanged.length}
+            </div>
+          )}
+          <div className="text-xs text-brand-gray pt-1">
+            Имя, специальность, телефон и email берутся с сайта; ручные правки
+            этих полей будут перезаписаны.
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-brand-gray">
+          Справочник уже совпадает с сайтом ({plan.unchanged.length} менеджеров).
+        </div>
       )}
+
+      <div className="flex gap-2 pt-1">
+        {changed && (
+          <button
+            type="button"
+            onClick={onApply}
+            disabled={busy}
+            className="ui-btn-primary"
+          >
+            {busy ? "Применяем…" : "Применить"}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="ui-btn-ghost"
+        >
+          {changed ? "Отмена" : "Закрыть"}
+        </button>
+      </div>
     </div>
   );
 }
