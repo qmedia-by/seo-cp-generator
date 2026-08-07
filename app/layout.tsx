@@ -4,6 +4,14 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Генератор КП по SEO — Qmedia",
   description: "Внутренний инструмент Qmedia для подготовки коммерческих предложений по SEO",
+  // Инструмент внутренний — в поиске ему делать нечего. Дублируется заголовком
+  // X-Robots-Tag (next.config.mjs) и robots.txt (app/robots.ts).
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false, noimageindex: true },
+  },
 };
 
 export default function RootLayout({
