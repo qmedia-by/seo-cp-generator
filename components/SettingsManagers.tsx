@@ -1,16 +1,67 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ManagerAvatar, { managerPhotoUrl } from "@/components/ManagerAvatar";
 import type { ManagersSyncSummary } from "@/lib/qmedia-managers";
 import type { Manager } from "@/lib/types";
 
+/** Черновик формы: всё, что правится текстовыми полями (фото — отдельно). */
+type Draft = Omit<Manager, "id" | "photoVersion">;
+
 /** Пустая форма нового менеджера. */
-const emptyDraft = (): Omit<Manager, "id"> => ({
+const emptyDraft = (): Draft => ({
   name: "",
   role: "",
   phone: "",
   email: "",
 });
+
+/** До какого квадрата ужимаем загруженное фото (аватарка на сайте — 180 px). */
+const PHOTO_SIDE = 512;
+
+/**
+ * Прочитать выбранный файл и отдать data-URL для отправки на сервер.
+ *
+ * Ужимаем прямо в браузере: иначе с телефона легко прилетит фотография на
+ * несколько мегабайт, а от неё в аватарке 48×48 толку нет. Кадрируем по центру
+ * в квадрат — именно так фото и показывается.
+ */
+async function toPhotoDataUrl(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Нужен файл с картинкой: JPEG, PNG или WebP");
+  }
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Не удалось прочитать картинку — попробуйте другой файл");
+  }
+
+  const side = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = Math.min(side, PHOTO_SIDE);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Браузер не смог обработать картинку");
+
+  // Белая подложка: прозрачный PNG иначе стал бы чёрным квадратом в JPEG.
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(
+    bitmap,
+    (bitmap.width - side) / 2,
+    (bitmap.height - side) / 2,
+    side,
+    side,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  bitmap.close();
+
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
 
 export default function SettingsManagers({
   initialManagers,
@@ -19,7 +70,10 @@ export default function SettingsManagers({
 }) {
   const [managers, setManagers] = useState<Manager[]>(initialManagers);
   const [editing, setEditing] = useState<string | "new" | null>(null);
-  const [draft, setDraft] = useState<Omit<Manager, "id">>(emptyDraft);
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  // Что делаем с фото при сохранении формы: `undefined` — не трогаем,
+  // `null` — удалить, строка — поставить этот data-URL.
+  const [photo, setPhoto] = useState<string | null | undefined>(undefined);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
@@ -53,14 +107,49 @@ export default function SettingsManagers({
     }
   };
 
+  /**
+   * Фото едет отдельным запросом: в справочнике лежит только отпечаток, а сами
+   * байты — в своей таблице. Вызывается после сохранения списка, чтобы у нового
+   * менеджера уже был id (иначе `saveManagers` тут же снёс бы фото как ничьё).
+   */
+  const persistPhoto = async (id: string, data: string | null) => {
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/settings/managers/${encodeURIComponent(id)}/photo`,
+        data === null
+          ? { method: "DELETE" }
+          : {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ data }),
+            },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error ?? `Ошибка сервера (${res.status})`);
+      const version = (body.photoVersion as string | null) ?? undefined;
+      setManagers((list) =>
+        list.map((m) => (m.id === id ? { ...m, photoVersion: version } : m)),
+      );
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось сохранить фото");
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startAdd = () => {
     setDraft(emptyDraft());
+    setPhoto(undefined);
     setEditing("new");
     setDone(null);
   };
 
   const startEdit = (m: Manager) => {
     setDraft({ name: m.name, role: m.role, phone: m.phone, email: m.email });
+    setPhoto(undefined);
     setEditing(m.id);
     setDone(null);
   };
@@ -77,15 +166,18 @@ export default function SettingsManagers({
       phone: draft.phone.trim(),
       email: draft.email.trim(),
     };
+    const id = editing === "new" ? crypto.randomUUID() : String(editing);
     const next =
       editing === "new"
-        ? [...managers, { id: crypto.randomUUID(), ...value }]
-        : managers.map((m) => (m.id === editing ? { ...m, ...value } : m));
+        ? [...managers, { id, ...value }]
+        : managers.map((m) => (m.id === id ? { ...m, ...value } : m));
     const ok = await persist(
       next,
       editing === "new" ? "Менеджер добавлен" : "Изменения сохранены",
     );
-    if (ok) setEditing(null);
+    if (!ok) return;
+    if (photo !== undefined && !(await persistPhoto(id, photo))) return;
+    setEditing(null);
   };
 
   const remove = async (m: Manager) => {
@@ -157,7 +249,8 @@ export default function SettingsManagers({
         <br />
         Кнопка <b>«Забрать с qmedia.by»</b> сверяет список с блоком
         «Персональные менеджеры» на сайте: сайт — главный источник, лишние
-        удаляются, недостающие добавляются. Сначала покажем, что изменится.
+        удаляются, недостающие добавляются, фото скачиваются с карточек. Сначала
+        покажем, что изменится.
       </div>
 
       {error && (
@@ -177,7 +270,10 @@ export default function SettingsManagers({
               title="Редактирование"
               draft={draft}
               saving={saving}
+              photo={photo}
+              currentPhoto={managerPhotoUrl(m)}
               onChange={setDraft}
+              onPhoto={setPhoto}
               onSubmit={submit}
               onCancel={() => setEditing(null)}
             />
@@ -186,11 +282,14 @@ export default function SettingsManagers({
               key={m.id}
               className="rounded-2xl border border-gray-200 bg-white p-4 flex flex-col gap-2"
             >
-              <div>
-                <div className="font-bold">{m.name}</div>
-                {m.role && (
-                  <div className="text-sm text-brand-gray">{m.role}</div>
-                )}
+              <div className="flex items-center gap-3">
+                <ManagerAvatar src={managerPhotoUrl(m)} name={m.name} size={48} />
+                <div className="min-w-0">
+                  <div className="font-bold">{m.name}</div>
+                  {m.role && (
+                    <div className="text-sm text-brand-gray">{m.role}</div>
+                  )}
+                </div>
               </div>
               <div className="text-sm space-y-0.5">
                 {m.phone && <div>{m.phone}</div>}
@@ -230,7 +329,10 @@ export default function SettingsManagers({
             title="Новый менеджер"
             draft={draft}
             saving={saving}
+            photo={photo}
+            currentPhoto={null}
             onChange={setDraft}
+            onPhoto={setPhoto}
             onSubmit={submit}
             onCancel={() => setEditing(null)}
           />
@@ -351,14 +453,15 @@ function SyncPlan({
             {group("Добавить", plan.added, "text-brand-greenDark")}
             {group("Обновить", plan.updated, "text-brand-ink")}
             {group("Удалить", plan.removed, "text-red-600")}
+            {group("Скачать фото", plan.photosChanged, "text-brand-greenDark")}
             {plan.unchanged.length > 0 && (
               <div className="text-sm text-brand-gray">
                 Без изменений: {plan.unchanged.length}
               </div>
             )}
             <div className="text-xs text-brand-gray pt-1">
-              Имя, специальность, телефон и email берутся с сайта; ручные правки
-              этих полей будут перезаписаны.
+              Имя, специальность, телефон, email и фото берутся с сайта; ручные
+              правки этих полей будут перезаписаны.
             </div>
           </div>
         ) : (
@@ -397,20 +500,46 @@ function ManagerForm({
   title,
   draft,
   saving,
+  photo,
+  currentPhoto,
   onChange,
+  onPhoto,
   onSubmit,
   onCancel,
 }: {
   title: string;
-  draft: Omit<Manager, "id">;
+  draft: Draft;
   saving: boolean;
-  onChange: (d: Omit<Manager, "id">) => void;
+  /** Черновик фото: `undefined` — не трогаем, `null` — удалить, строка — новое. */
+  photo: string | null | undefined;
+  /** Адрес уже сохранённого фото (null — его нет). */
+  currentPhoto: string | null;
+  onChange: (d: Draft) => void;
+  onPhoto: (next: string | null | undefined) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  // Ошибка выбора файла живёт в форме: общий блок ошибок — вверху секции, а
+  // при десятке карточек его отсюда не видно.
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const preview = photo === undefined ? currentPhoto : photo;
+
+  const pickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Сбрасываем input, иначе повторный выбор того же файла не даст события.
+    e.target.value = "";
+    if (!file) return;
+    setPhotoError(null);
+    try {
+      onPhoto(await toPhotoDataUrl(file));
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : "Не удалось прочитать файл");
+    }
+  };
+
   const field = (
     label: string,
-    key: keyof Omit<Manager, "id">,
+    key: keyof Draft,
     placeholder: string,
     type = "text",
   ) => (
@@ -431,6 +560,44 @@ function ManagerForm({
       <div className="font-bold text-sm uppercase tracking-wide text-brand-gray">
         {title}
       </div>
+
+      <div className="flex items-center gap-3">
+        <ManagerAvatar src={preview} name={draft.name} size={64} />
+        <div className="flex flex-col items-start gap-1">
+          <label
+            className={`ui-btn-ghost text-xs px-3 py-1.5 ${
+              saving ? "pointer-events-none opacity-50" : "cursor-pointer"
+            }`}
+          >
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={saving}
+              onChange={pickPhoto}
+            />
+            {preview ? "Заменить фото" : "Загрузить фото"}
+          </label>
+          {preview && (
+            <button
+              type="button"
+              onClick={() => {
+                setPhotoError(null);
+                onPhoto(null);
+              }}
+              disabled={saving}
+              className="text-xs text-brand-gray hover:text-red-600"
+            >
+              Удалить фото
+            </button>
+          )}
+          <span className="text-xs text-brand-gray">
+            JPEG, PNG или WebP. Обрежем по центру в квадрат {PHOTO_SIDE} px.
+          </span>
+        </div>
+      </div>
+      {photoError && <div className="text-xs text-red-600">{photoError}</div>}
+
       {field("Имя Фамилия", "name", "Андрей Марушко")}
       {field("Специальность", "role", "IT Account-менеджер Qmedia")}
       {field("Телефон", "phone", "+375 (29) 000-00-00")}

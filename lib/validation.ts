@@ -82,7 +82,11 @@ export const proposalManagerSchema = z.object({
   email: z.string().trim().max(120).default(""),
 });
 
-/** Менеджер в справочнике настроек. */
+/**
+ * Менеджер в справочнике настроек. `photoVersion` сюда не входит намеренно:
+ * это производное поле (отпечаток фото из таблицы `manager_photos`), и zod
+ * молча его отбросит — фото меняется своей ручкой, а не сохранением списка.
+ */
 export const managerSchema = proposalManagerSchema.extend({
   id: z.string().trim().min(1).max(64),
 });

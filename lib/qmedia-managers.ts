@@ -13,7 +13,17 @@
 // `data-profile` у `.contact-manager` (добавлен на сайт специально под эту
 // синхронизацию). Карточка без атрибута — не ошибка: `role` тогда остаётся
 // прежним (см. `mergeManagersFromSite`).
+//
+// Фото берём из `img.contact-manager__avatar` и скачиваем целиком (см.
+// `fetchQmediaPhotos`): хранить ссылку на сайт нельзя — картинка нужна и когда
+// qmedia.by недоступен, и после того, как там переложат файлы.
 
+import {
+  MAX_PHOTO_BYTES,
+  PHOTO_MIME,
+  photoVersion,
+  type ManagerPhoto,
+} from "./manager-photos";
 import type { Manager } from "./types";
 
 export const QMEDIA_CONTACTS_URL = "https://www.qmedia.by/kontakty.html";
@@ -25,6 +35,8 @@ export interface SiteManager {
   role: string;
   phone: string;
   email: string;
+  /** Абсолютный адрес аватарки. Пустая строка — в карточке фото нет. */
+  photoUrl: string;
 }
 
 /** Что даст синхронизация (имена для показа пользователю). */
@@ -37,11 +49,15 @@ export interface ManagersSyncSummary {
   removed: string[];
   /** Совпали полностью. */
   unchanged: string[];
+  /** У кого скачается новое фото (имена входят и в `added`/`updated`). */
+  photosChanged: string[];
 }
 
 /** Сводка + готовый список для сохранения. */
 export interface ManagersSyncPlan extends ManagersSyncSummary {
   managers: Manager[];
+  /** Что записать в `manager_photos`: только изменившиеся картинки. */
+  photos: { managerId: string; photo: ManagerPhoto }[];
 }
 
 // --- Парсинг ---
@@ -119,7 +135,10 @@ export function formatQmediaPhone(raw: string): string {
  * запроса дают разную выдачу), поэтому на него опираться нельзя — итоговый
  * порядок задаёт `mergeManagersFromSite`.
  */
-export function parseQmediaManagers(html: string): SiteManager[] {
+export function parseQmediaManagers(
+  html: string,
+  baseUrl: string = QMEDIA_CONTACTS_URL,
+): SiteManager[] {
   const list = sliceContactList(html);
   if (!list) return [];
 
@@ -148,12 +167,19 @@ export function parseQmediaManagers(html: string): SiteManager[] {
     const phones = [...card.matchAll(/href="tel:([^"]+)"/gi)].map((p) => p[1]);
     const email = /href="mailto:([^"?]+)/i.exec(card);
     const role = /\bdata-profile="([^"]*)"/i.exec(card);
+    const avatar =
+      /<img[^>]*\bclass="[^"]*\bcontact-manager__avatar\b[^"]*"[^>]*\bsrc="([^"]+)"/i.exec(
+        card,
+      );
 
     out.push({
       name,
       role: role ? text(role[1]) : "",
       phone: phones.length ? formatQmediaPhone(phones[phones.length - 1]) : "",
       email: email ? decodeEntities(email[1]).trim() : "",
+      // На сайте адрес относительный («assets/cache/…»), поэтому разворачиваем
+      // его относительно страницы. Битый src — просто «фото нет».
+      photoUrl: avatar ? absoluteUrl(decodeEntities(avatar[1]).trim(), baseUrl) : "",
     });
   }
 
@@ -191,6 +217,77 @@ export async function fetchQmediaManagers(
   return managers;
 }
 
+/** Развернуть `src` карточки в абсолютный адрес. Разобрать не удалось — «фото нет». */
+function absoluteUrl(src: string, baseUrl: string): string {
+  try {
+    const url = new URL(src, baseUrl);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+/** Сколько картинок тянем одновременно: сайт свой, но долбить его незачем. */
+const PHOTO_CONCURRENCY = 4;
+
+/**
+ * Скачать одну аватарку. Любая беда (404, не картинка, слишком большой файл) —
+ * это `null` и запись в лог: из-за одного битого фото синхронизация всего
+ * справочника падать не должна.
+ */
+async function fetchPhoto(url: string): Promise<ManagerPhoto | null> {
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      redirect: "follow",
+      headers: { Accept: "image/*", "User-Agent": "qmedia-seo-cp-generator/1.0" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) throw new Error(`сайт ответил ${res.status}`);
+
+    const mime = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    if (!(PHOTO_MIME as readonly string[]).includes(mime)) {
+      throw new Error(`неподдерживаемый тип «${mime || "не указан"}»`);
+    }
+
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (bytes.length === 0) throw new Error("пустой файл");
+    if (bytes.length > MAX_PHOTO_BYTES) {
+      throw new Error(`файл больше ${Math.round(MAX_PHOTO_BYTES / 1000)} КБ`);
+    }
+    return { mime, base64: bytes.toString("base64") };
+  } catch (err) {
+    console.warn(
+      `Фото менеджера ${url} не скачалось: ${err instanceof Error ? err.message : err}`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Скачать аватарки менеджеров. Ключ результата — тот же `photoUrl`, что в
+ * `SiteManager`; кого скачать не вышло, в карте просто нет (их фото у нас
+ * останется прежним, см. `mergeManagersFromSite`).
+ */
+export async function fetchQmediaPhotos(
+  urls: string[],
+): Promise<Map<string, ManagerPhoto>> {
+  const queue = [...new Set(urls.filter(Boolean))];
+  const out = new Map<string, ManagerPhoto>();
+
+  const worker = async () => {
+    for (let url = queue.shift(); url; url = queue.shift()) {
+      const photo = await fetchPhoto(url);
+      if (photo) out.set(url, photo);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(PHOTO_CONCURRENCY, queue.length) }, worker),
+  );
+
+  return out;
+}
+
 // --- Слияние со справочником ---
 
 /** Ключ сопоставления — «Имя Фамилия» без регистра, лишних пробелов и ё/е. */
@@ -209,12 +306,20 @@ export function normalizeName(name: string): string {
  *
  * Пустое значение с сайта (в карточке не указаны должность, телефон или email)
  * **не** затирает заполненное у нас: это почти наверняка пробел в данных сайта,
- * а не решение «контакт удалить».
+ * а не решение «контакт удалить». Так же и с фото: не скачалось (или в карточке
+ * его нет) — остаётся то, что было.
+ *
+ * Скачанные картинки передаются в `photos` (ключ — `SiteManager.photoUrl`,
+ * см. `fetchQmediaPhotos`); в план попадают только те, что отличаются от уже
+ * сохранённых — сравниваем по отпечатку `Manager.photoVersion`.
  */
 export function mergeManagersFromSite(
   current: Manager[],
   site: SiteManager[],
-  newId: () => string = () => crypto.randomUUID(),
+  {
+    photos,
+    newId = () => crypto.randomUUID(),
+  }: { photos?: Map<string, ManagerPhoto>; newId?: () => string } = {},
 ): ManagersSyncPlan {
   const byName = new Map<string, Manager>();
   for (const m of current) {
@@ -224,38 +329,57 @@ export function mergeManagersFromSite(
 
   const plan: ManagersSyncPlan = {
     managers: [],
+    photos: [],
     added: [],
     updated: [],
     removed: [],
     unchanged: [],
+    photosChanged: [],
   };
   const matched = new Set<string>();
 
   for (const s of site) {
+    const photo = photos?.get(s.photoUrl);
+    const version = photo ? photoVersion(photo) : undefined;
     const key = normalizeName(s.name);
     const existing = byName.get(key);
+
     if (!existing) {
+      const id = newId();
       plan.managers.push({
-        id: newId(),
+        id,
         name: s.name,
         role: s.role,
         phone: s.phone,
         email: s.email,
+        ...(version ? { photoVersion: version } : {}),
       });
       plan.added.push(s.name);
+      if (photo && version) {
+        plan.photos.push({ managerId: id, photo });
+        plan.photosChanged.push(s.name);
+      }
       continue;
     }
 
     matched.add(key);
+    // Фото меняем, только если оно скачалось и отличается от сохранённого.
+    const photoIsNew = !!version && version !== existing.photoVersion;
     const next: Manager = {
       ...existing,
       name: s.name,
       role: s.role || existing.role,
       phone: s.phone || existing.phone,
       email: s.email || existing.email,
+      ...(photoIsNew ? { photoVersion: version } : {}),
     };
     plan.managers.push(next);
+    if (photoIsNew && photo) {
+      plan.photos.push({ managerId: existing.id, photo });
+      plan.photosChanged.push(s.name);
+    }
     if (
+      photoIsNew ||
       next.name !== existing.name ||
       next.role !== existing.role ||
       next.phone !== existing.phone ||
@@ -277,6 +401,7 @@ export function mergeManagersFromSite(
   plan.updated.sort(byRu);
   plan.removed.sort(byRu);
   plan.unchanged.sort(byRu);
+  plan.photosChanged.sort(byRu);
 
   return plan;
 }

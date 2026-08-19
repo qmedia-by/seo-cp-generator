@@ -1,5 +1,6 @@
 "use client";
 
+import ManagerAvatar, { managerPhotoUrl } from "@/components/ManagerAvatar";
 import type { Manager, ProposalManager } from "@/lib/types";
 
 interface Props {
@@ -56,12 +57,21 @@ export default function StepManager({
                       : "border-gray-300 bg-white hover:border-brand-green"
                   }`}
                 >
-                  <div className="font-semibold">{m.name}</div>
-                  {m.role && (
-                    <div className="text-xs text-brand-gray">{m.role}</div>
-                  )}
-                  <div className="text-xs text-brand-gray mt-1">
-                    {[m.phone, m.email].filter(Boolean).join(" · ") || "—"}
+                  <div className="flex items-center gap-3">
+                    <ManagerAvatar
+                      src={managerPhotoUrl(m)}
+                      name={m.name}
+                      size={40}
+                    />
+                    <div className="min-w-0">
+                      <div className="font-semibold">{m.name}</div>
+                      {m.role && (
+                        <div className="text-xs text-brand-gray">{m.role}</div>
+                      )}
+                      <div className="text-xs text-brand-gray mt-1">
+                        {[m.phone, m.email].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                    </div>
                   </div>
                 </button>
               );

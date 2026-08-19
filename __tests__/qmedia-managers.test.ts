@@ -6,6 +6,7 @@ import {
   normalizeName,
   parseQmediaManagers,
 } from "../lib/qmedia-managers";
+import { photoVersion, type ManagerPhoto } from "../lib/manager-photos";
 import type { Manager } from "../lib/types";
 
 /**
@@ -13,7 +14,7 @@ import type { Manager } from "../lib/types";
  * урезанный до четырёх карточек — со всеми встреченными вариантами:
  *   1) два телефона + мессенджеры + email;
  *   2) телефон в формате «+375 (44)» и номер без дефисов;
- *   3) карточка без мессенджеров;
+ *   3) карточка без мессенджеров и без фото;
  *   4) имя с висящим пробелом и один телефон.
  * Вокруг — «шум» страницы с телефоном и mailto офиса: он не должен попасть в разбор.
  */
@@ -62,6 +63,7 @@ const PAGE = `
     </div>
   </li><li class="contact__list-point col-sm-6 col-lg-4">
     <div class="contact-manager" data-profile="IT account-менеджер">
+      <a href="darya_papovich.html"><img class="contact-manager__avatar" src="assets/cache/images/personal/darya_mini%281%29-180x-d13.png" width="98" height="98" alt="Дарья Папович" /></a>
       <div class="contact-manager__body">
         <a href="darya_papovich.html"><div class="contact-manager__title">Дарья Папович</div></a>
         <ul class="contact-manager__list">
@@ -105,6 +107,10 @@ const PAGE = `
   <a class="phone-link" href="tel:+375170000000">не менеджер</a>
 </div>
 `;
+
+/** Две разные «картинки»: содержимое не важно, важен разный отпечаток. */
+const PHOTO_A: ManagerPhoto = { mime: "image/png", base64: "aGVsbG8=" };
+const PHOTO_B: ManagerPhoto = { mime: "image/jpeg", base64: "d29ybGQ=" };
 
 describe("parseQmediaManagers", () => {
   const parsed = parseQmediaManagers(PAGE);
@@ -150,6 +156,20 @@ describe("parseQmediaManagers", () => {
     const managers = parseQmediaManagers(noAttr);
     expect(managers).toHaveLength(4);
     expect(managers.every((m) => m.role === "")).toBe(true);
+  });
+
+  it("разворачивает адрес фото в абсолютный", () => {
+    expect(parsed.map((m) => m.photoUrl)).toEqual([
+      "https://www.qmedia.by/a.png",
+      "https://www.qmedia.by/assets/cache/images/personal/darya_mini%281%29-180x-d13.png",
+      "",
+      "",
+    ]);
+  });
+
+  it("карточка без фото не ломает разбор", () => {
+    expect(parsed[2].name).toBe("Евгений Лащевский");
+    expect(parsed[2].photoUrl).toBe("");
   });
 
   it("возвращает пустой список, если блока нет (вёрстка поменялась)", () => {
@@ -201,7 +221,7 @@ describe("mergeManagersFromSite", () => {
 
   const site = parseQmediaManagers(PAGE);
   let n = 0;
-  const plan = mergeManagersFromSite(current, site, () => `new${++n}`);
+  const plan = mergeManagersFromSite(current, site, { newId: () => `new${++n}` });
 
   it("состав — как на сайте, порядок — по алфавиту", () => {
     expect(plan.managers.map((m) => m.name)).toEqual([
@@ -213,7 +233,9 @@ describe("mergeManagersFromSite", () => {
   });
 
   it("не зависит от порядка карточек на сайте (сайт их тасует)", () => {
-    const shuffled = mergeManagersFromSite(current, [...site].reverse(), () => "x");
+    const shuffled = mergeManagersFromSite(current, [...site].reverse(), {
+      newId: () => "x",
+    });
     expect(shuffled.managers.map((m) => m.name)).toEqual(
       plan.managers.map((m) => m.name),
     );
@@ -258,7 +280,7 @@ describe("mergeManagersFromSite", () => {
           email: "a@b.by",
         },
       ],
-      [{ name: "Андрей Жук", role: "", phone: "", email: "" }],
+      [{ name: "Андрей Жук", role: "", phone: "", email: "", photoUrl: "" }],
     );
     expect(kept.managers[0].role).toBe("Директор");
     expect(kept.managers[0].phone).toBe("+375 (29) 111-11-11");
@@ -266,12 +288,88 @@ describe("mergeManagersFromSite", () => {
     expect(kept.unchanged).toEqual(["Андрей Жук"]);
   });
 
+  it("новому менеджеру кладёт скачанное фото", () => {
+    const withPhotos = mergeManagersFromSite(current, site, {
+      newId: () => "new",
+      photos: new Map([["https://www.qmedia.by/a.png", PHOTO_A]]),
+    });
+    const zhuk = withPhotos.managers.find((m) => m.name === "Андрей Жук")!;
+    expect(zhuk.photoVersion).toBe(photoVersion(PHOTO_A));
+    expect(withPhotos.photos).toEqual([{ managerId: "a", photo: PHOTO_A }]);
+    expect(withPhotos.photosChanged).toEqual(["Андрей Жук"]);
+  });
+
   it("сообщает, когда применять нечего", () => {
     const same = mergeManagersFromSite(
       [{ id: "a", name: "Андрей Жук", role: "", phone: "+375 (29) 1", email: "a@b.by" }],
-      [{ name: "Андрей Жук", role: "", phone: "+375 (29) 1", email: "a@b.by" }],
+      [
+        {
+          name: "Андрей Жук",
+          role: "",
+          phone: "+375 (29) 1",
+          email: "a@b.by",
+          photoUrl: "",
+        },
+      ],
     );
     expect(hasChanges(same)).toBe(false);
     expect(hasChanges(plan)).toBe(true);
+  });
+});
+
+/**
+ * Фото: сравниваем по отпечатку скачанного файла, а не по адресу — на сайте
+ * картинку могут заменить, не меняя имени файла.
+ */
+describe("mergeManagersFromSite: фото", () => {
+  const URL_A = "https://www.qmedia.by/a.png";
+  const siteOne = [
+    {
+      name: "Андрей Жук",
+      role: "Директор",
+      phone: "+375 (29) 111-11-11",
+      email: "a@b.by",
+      photoUrl: URL_A,
+    },
+  ];
+  const currentOne = (photoVersionValue?: string): Manager[] => [
+    {
+      id: "a",
+      name: "Андрей Жук",
+      role: "Директор",
+      phone: "+375 (29) 111-11-11",
+      email: "a@b.by",
+      ...(photoVersionValue ? { photoVersion: photoVersionValue } : {}),
+    },
+  ];
+
+  it("то же самое фото не считается изменением", () => {
+    const plan = mergeManagersFromSite(currentOne(photoVersion(PHOTO_A)), siteOne, {
+      photos: new Map([[URL_A, PHOTO_A]]),
+    });
+    expect(plan.photos).toEqual([]);
+    expect(plan.photosChanged).toEqual([]);
+    expect(plan.unchanged).toEqual(["Андрей Жук"]);
+    expect(hasChanges(plan)).toBe(false);
+  });
+
+  it("замена фото при прочих совпадающих данных — это изменение", () => {
+    const plan = mergeManagersFromSite(currentOne(photoVersion(PHOTO_A)), siteOne, {
+      photos: new Map([[URL_A, PHOTO_B]]),
+    });
+    expect(plan.photos).toEqual([{ managerId: "a", photo: PHOTO_B }]);
+    expect(plan.photosChanged).toEqual(["Андрей Жук"]);
+    // Иначе кнопки «Применить» в интерфейсе не будет и фото не обновится.
+    expect(plan.updated).toEqual(["Андрей Жук"]);
+    expect(hasChanges(plan)).toBe(true);
+  });
+
+  it("не скачалось — остаётся то фото, что было", () => {
+    const plan = mergeManagersFromSite(currentOne("старая-версия"), siteOne, {
+      photos: new Map(),
+    });
+    expect(plan.managers[0].photoVersion).toBe("старая-версия");
+    expect(plan.photos).toEqual([]);
+    expect(plan.unchanged).toEqual(["Андрей Жук"]);
   });
 });

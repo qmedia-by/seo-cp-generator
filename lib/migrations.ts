@@ -72,6 +72,25 @@ const MIGRATIONS: Migration[] = [
       );
     },
   },
+  {
+    // Фото менеджеров. Отдельная таблица, а не поле в jsonb со справочником:
+    // список менеджеров читается на каждый рендер визарда и уезжает в браузер
+    // пропсами — картинки там были бы мёртвым грузом. `manager_id` — id из
+    // справочника (`app_settings.data->'managers'`), внешнего ключа нет, потому
+    // что справочник живёт в jsonb; осиротевшие строки чистит `saveManagers`.
+    id: "0003_manager_photos",
+    run: async (c) => {
+      await c.query(
+        `CREATE TABLE IF NOT EXISTS manager_photos (
+           manager_id text PRIMARY KEY,
+           mime       text NOT NULL,
+           version    text NOT NULL,
+           bytes      bytea NOT NULL,
+           updated_at timestamptz NOT NULL DEFAULT now()
+         )`,
+      );
+    },
+  },
 ];
 
 /** Список id — для проверки уникальности в тестах. */

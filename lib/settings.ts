@@ -5,6 +5,10 @@
 //   'works'    — списки работ по направлениям (`WorksConfig`), см. lib/works-config.ts;
 //   'managers' — справочник менеджеров для шага «Менеджер» в визарде.
 //
+// Особняком — фото менеджеров: они лежат не в jsonb, а в своей таблице
+// `manager_photos` (см. lib/manager-photos.ts), и в справочник при чтении
+// подмешивается только отпечаток `photoVersion`.
+//
 // Пары функций `getX` / `getXOrDefault`: первые пробрасывают ошибку БД (нужны там,
 // где по настройкам считается и сохраняется КП), вторые молча откатываются на
 // значения по умолчанию — чтобы недоступная БД не роняла страницы визарда/настроек
@@ -13,6 +17,7 @@
 import { mergeCalcConfig, type CalcConfig } from "./calc-config";
 import { COMPANY } from "./company";
 import { ensureSchema, getPool } from "./db";
+import { photoVersion, type ManagerPhoto } from "./manager-photos";
 import { mergeWorksConfig, type WorksConfig } from "./works-config";
 import type { Manager } from "./types";
 
@@ -126,8 +131,16 @@ function normalizeManagers(raw: unknown): Manager[] {
  */
 export async function getManagers(): Promise<Manager[]> {
   const raw = await readSetting(MANAGERS_KEY);
-  if (raw === null) return DEFAULT_MANAGERS.map((m) => ({ ...m }));
-  return normalizeManagers(raw);
+  const managers =
+    raw === null ? DEFAULT_MANAGERS.map((m) => ({ ...m })) : normalizeManagers(raw);
+
+  // Отпечатки фото — из соседней таблицы: в jsonb их нет, это производное поле.
+  const versions = await readPhotoVersions();
+  for (const m of managers) {
+    const version = versions.get(m.id);
+    if (version) m.photoVersion = version;
+  }
+  return managers;
 }
 
 export async function getManagersOrDefault(): Promise<Manager[]> {
@@ -140,5 +153,81 @@ export async function getManagersOrDefault(): Promise<Manager[]> {
 }
 
 export async function saveManagers(managers: Manager[]): Promise<void> {
-  await writeSetting(MANAGERS_KEY, normalizeManagers(managers));
+  const list = normalizeManagers(managers);
+  await writeSetting(MANAGERS_KEY, list);
+  // Фото тех, кого в списке больше нет, никому не нужны: внешнего ключа на
+  // jsonb-справочник не сделать, поэтому чистим здесь. Пустой список — значит
+  // и фото все лишние.
+  await getPool().query(
+    `DELETE FROM manager_photos WHERE manager_id <> ALL($1::text[])`,
+    [list.map((m) => m.id)],
+  );
+}
+
+// --- Фото менеджеров ---
+
+/** Фото из БД: байты + всё, что нужно отдать браузеру. */
+export interface StoredManagerPhoto {
+  mime: string;
+  version: string;
+  bytes: Buffer;
+}
+
+/** id менеджера → отпечаток его фото. Менеджеров без фото в карте нет. */
+async function readPhotoVersions(): Promise<Map<string, string>> {
+  await ensureSchema();
+  const res = await getPool().query<{ manager_id: string; version: string }>(
+    `SELECT manager_id, version FROM manager_photos`,
+  );
+  return new Map(res.rows.map((r) => [r.manager_id, r.version]));
+}
+
+export async function getManagerPhoto(
+  id: string,
+): Promise<StoredManagerPhoto | null> {
+  await ensureSchema();
+  const res = await getPool().query<StoredManagerPhoto>(
+    `SELECT mime, version, bytes FROM manager_photos WHERE manager_id = $1`,
+    [id],
+  );
+  return res.rows[0] ?? null;
+}
+
+/** Записать (заменить) фото менеджера. Возвращает отпечаток новой картинки. */
+export async function saveManagerPhoto(
+  id: string,
+  photo: ManagerPhoto,
+): Promise<string> {
+  await ensureSchema();
+  const version = photoVersion(photo);
+  await getPool().query(
+    `INSERT INTO manager_photos (manager_id, mime, version, bytes, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (manager_id) DO UPDATE
+       SET mime = EXCLUDED.mime,
+           version = EXCLUDED.version,
+           bytes = EXCLUDED.bytes,
+           updated_at = now()`,
+    [id, photo.mime, version, Buffer.from(photo.base64, "base64")],
+  );
+  return version;
+}
+
+/** Пачкой — для синхронизации с сайтом. */
+export async function saveManagerPhotos(
+  entries: { managerId: string; photo: ManagerPhoto }[],
+): Promise<void> {
+  for (const { managerId, photo } of entries) {
+    await saveManagerPhoto(managerId, photo);
+  }
+}
+
+/** Убрать фото. `false` — его и не было. */
+export async function deleteManagerPhoto(id: string): Promise<boolean> {
+  await ensureSchema();
+  const res = await getPool().query(
+    `DELETE FROM manager_photos WHERE manager_id = $1`,
+    [id],
+  );
+  return (res.rowCount ?? 0) > 0;
 }

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import {
   fetchQmediaManagers,
+  fetchQmediaPhotos,
   mergeManagersFromSite,
   QMEDIA_CONTACTS_URL,
   type ManagersSyncPlan,
 } from "@/lib/qmedia-managers";
-import { getManagers, saveManagers } from "@/lib/settings";
+import { getManagers, saveManagers, saveManagerPhotos } from "@/lib/settings";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,10 +17,15 @@ export const dynamic = "force-dynamic";
  * GET  — предпросмотр: что добавится/обновится/удалится (ничего не пишет).
  * POST — применить. План считается заново, а не берётся с клиента: так на
  *        сервер нельзя прислать «свой» список под видом синхронизации.
+ *
+ * Аватарки качаются и в предпросмотре: сравнивать их иначе не с чем, а
+ * менеджер, у которого поменялось только фото, обязан попасть в план — иначе
+ * кнопки «Применить» пользователь не увидит.
  */
 async function buildPlan(): Promise<ManagersSyncPlan> {
   const [current, site] = await Promise.all([getManagers(), fetchQmediaManagers()]);
-  return mergeManagersFromSite(current, site);
+  const photos = await fetchQmediaPhotos(site.map((s) => s.photoUrl));
+  return mergeManagersFromSite(current, site, { photos });
 }
 
 function fail(err: unknown) {
@@ -30,7 +36,8 @@ function fail(err: unknown) {
 
 export async function GET() {
   try {
-    const { managers: _next, ...summary } = await buildPlan();
+    // Ни списка, ни тем более байтов картинок клиенту не отдаём — только сводку.
+    const { managers: _next, photos: _photos, ...summary } = await buildPlan();
     return NextResponse.json({ ...summary, source: QMEDIA_CONTACTS_URL });
   } catch (err) {
     return fail(err);
@@ -39,8 +46,11 @@ export async function GET() {
 
 export async function POST() {
   try {
-    const { managers, ...summary } = await buildPlan();
+    const { managers, photos, ...summary } = await buildPlan();
+    // Сначала список: `saveManagers` заодно убирает фото тех, кого удалили.
+    // Потом картинки — их владельцы в списке уже есть.
     await saveManagers(managers);
+    await saveManagerPhotos(photos);
     return NextResponse.json({
       ...summary,
       source: QMEDIA_CONTACTS_URL,
