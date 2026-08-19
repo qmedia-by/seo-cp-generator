@@ -97,11 +97,22 @@ export interface ProposalManager {
   role: string;
   phone: string;
   email: string;
+  /** Личная страница на qmedia.by («Смотреть резюме» на слайде PM). */
+  resumeUrl?: string;
+  /**
+   * id менеджера в справочнике — **только чтобы найти фото** в таблице
+   * `manager_photos` при рендере PDF (см. lib/pdf/photos.ts). Данные менеджера
+   * при этом остаются снимком: правка справочника их не меняет. Нет id —
+   * контакты введены вручную, фото не будет.
+   */
+  id?: string;
 }
 
 /** Менеджер из справочника настроек (тот же набор полей + идентификатор). */
 export interface Manager extends ProposalManager {
   id: string;
+  /** Ссылка на резюме; с сайта приезжает как адрес вокруг аватарки. */
+  resumeUrl: string;
   /**
    * Отпечаток загруженного фото; нет фото — поля нет. Значение **производное**:
    * в jsonb со справочником не сохраняется, а подставляется при чтении из
@@ -207,8 +218,14 @@ export interface Proposal {
   input: ProposalInput;
   directions: DirectionSelection[];
   meta?: ProposalMeta;
-  /** Менеджер, ведущий это КП. Нет — берутся контакты по умолчанию (COMPANY.manager). */
+  /** Менеджер, подготовивший КП. Нет — берутся контакты по умолчанию (COMPANY.manager). */
   manager?: ProposalManager;
+  /**
+   * Project-менеджер проекта — отдельный слайд PDF. Выбирается из того же
+   * справочника, что и `manager`, но **независимо**: КП часто готовит продавец,
+   * а ведёт проект другой человек. Нет — слайд PM показывает контакт по умолчанию.
+   */
+  projectManager?: ProposalManager;
   /** Снимок расчёта на момент сохранения (для истории). */
   calcSnapshot: ScheduleResult;
   /**

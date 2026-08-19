@@ -16,7 +16,9 @@
 //
 // Фото берём из `img.contact-manager__avatar` и скачиваем целиком (см.
 // `fetchQmediaPhotos`): хранить ссылку на сайт нельзя — картинка нужна и когда
-// qmedia.by недоступен, и после того, как там переложат файлы.
+// qmedia.by недоступен, и после того, как там переложат файлы. А вот ссылку на
+// личную страницу («Смотреть резюме» на слайде Project-менеджера) наоборот
+// храним адресом: она ведёт на сайт, и её актуальность — забота сайта.
 
 import {
   MAX_PHOTO_BYTES,
@@ -37,6 +39,12 @@ export interface SiteManager {
   email: string;
   /** Абсолютный адрес аватарки. Пустая строка — в карточке фото нет. */
   photoUrl: string;
+  /**
+   * Личная страница менеджера — адрес, в который на сайте обёрнута аватарка
+   * (`<a href="andrej_zhuk.html"><img class="contact-manager__avatar">`).
+   * В КП уходит как ссылка «Смотреть резюме».
+   */
+  resumeUrl: string;
 }
 
 /** Что даст синхронизация (имена для показа пользователю). */
@@ -171,6 +179,12 @@ export function parseQmediaManagers(
       /<img[^>]*\bclass="[^"]*\bcontact-manager__avatar\b[^"]*"[^>]*\bsrc="([^"]+)"/i.exec(
         card,
       );
+    // Резюме — ссылка, в которую обёрнута аватарка. Между <a> и <img> на сайте
+    // стоят переносы и табуляции, поэтому допускаем любые пробелы.
+    const resume =
+      /<a[^>]*\bhref="([^"]+)"[^>]*>\s*<img[^>]*\bclass="[^"]*\bcontact-manager__avatar\b/i.exec(
+        card,
+      );
 
     out.push({
       name,
@@ -180,6 +194,7 @@ export function parseQmediaManagers(
       // На сайте адрес относительный («assets/cache/…»), поэтому разворачиваем
       // его относительно страницы. Битый src — просто «фото нет».
       photoUrl: avatar ? absoluteUrl(decodeEntities(avatar[1]).trim(), baseUrl) : "",
+      resumeUrl: resume ? absoluteUrl(decodeEntities(resume[1]).trim(), baseUrl) : "",
     });
   }
 
@@ -298,7 +313,7 @@ export function normalizeName(name: string): string {
 /**
  * Наложить данные сайта на текущий справочник: сайт — главный источник.
  *
- * - есть у обоих → обновляем имя/должность/телефон/email, сохраняем `id`;
+ * - есть у обоих → обновляем имя/должность/телефон/email/резюме, сохраняем `id`;
  * - есть только на сайте → добавляем;
  * - есть только у нас → удаляем;
  * - результат сортируется по имени: порядок карточек на сайте случайный, и
@@ -352,6 +367,7 @@ export function mergeManagersFromSite(
         role: s.role,
         phone: s.phone,
         email: s.email,
+        resumeUrl: s.resumeUrl,
         ...(version ? { photoVersion: version } : {}),
       });
       plan.added.push(s.name);
@@ -371,6 +387,7 @@ export function mergeManagersFromSite(
       role: s.role || existing.role,
       phone: s.phone || existing.phone,
       email: s.email || existing.email,
+      resumeUrl: s.resumeUrl || existing.resumeUrl,
       ...(photoIsNew ? { photoVersion: version } : {}),
     };
     plan.managers.push(next);
@@ -383,7 +400,8 @@ export function mergeManagersFromSite(
       next.name !== existing.name ||
       next.role !== existing.role ||
       next.phone !== existing.phone ||
-      next.email !== existing.email
+      next.email !== existing.email ||
+      next.resumeUrl !== existing.resumeUrl
     ) {
       plan.updated.push(s.name);
     } else {

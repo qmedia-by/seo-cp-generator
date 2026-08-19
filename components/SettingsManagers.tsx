@@ -14,6 +14,7 @@ const emptyDraft = (): Draft => ({
   role: "",
   phone: "",
   email: "",
+  resumeUrl: "",
 });
 
 /** До какого квадрата ужимаем загруженное фото (аватарка на сайте — 180 px). */
@@ -148,7 +149,13 @@ export default function SettingsManagers({
   };
 
   const startEdit = (m: Manager) => {
-    setDraft({ name: m.name, role: m.role, phone: m.phone, email: m.email });
+    setDraft({
+      name: m.name,
+      role: m.role,
+      phone: m.phone,
+      email: m.email,
+      resumeUrl: m.resumeUrl,
+    });
     setPhoto(undefined);
     setEditing(m.id);
     setDone(null);
@@ -165,6 +172,7 @@ export default function SettingsManagers({
       role: draft.role.trim(),
       phone: draft.phone.trim(),
       email: draft.email.trim(),
+      resumeUrl: draft.resumeUrl.trim(),
     };
     const id = editing === "new" ? crypto.randomUUID() : String(editing);
     const next =
@@ -242,15 +250,16 @@ export default function SettingsManagers({
   return (
     <div className="space-y-4">
       <div className="ui-note">
-        Эти люди доступны для выбора на шаге <b>«Менеджер»</b> при создании КП.
-        Выбранные контакты попадают на обложку PDF («Подготовил») и в блок
-        контактов в конце презентации. В уже сохранённых КП остаются те данные,
-        которые были выбраны при их создании.
+        Эти люди доступны для выбора на шагах <b>«Менеджер»</b> и{" "}
+        <b>«Project-менеджер»</b> при создании КП. Менеджер попадает на обложку
+        PDF («Подготовлено»), Project-менеджер — на свой слайд и в состав
+        команды. В уже сохранённых КП остаются те данные, которые были выбраны
+        при их создании.
         <br />
         Кнопка <b>«Забрать с qmedia.by»</b> сверяет список с блоком
         «Персональные менеджеры» на сайте: сайт — главный источник, лишние
-        удаляются, недостающие добавляются, фото скачиваются с карточек. Сначала
-        покажем, что изменится.
+        удаляются, недостающие добавляются, фото и ссылки на резюме берутся из
+        карточек. Сначала покажем, что изменится.
       </div>
 
       {error && (
@@ -295,6 +304,16 @@ export default function SettingsManagers({
                 {m.phone && <div>{m.phone}</div>}
                 {m.email && (
                   <div className="text-brand-greenDark">{m.email}</div>
+                )}
+                {m.resumeUrl && (
+                  <a
+                    href={m.resumeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-brand-gray underline hover:text-brand-greenDark"
+                  >
+                    Резюме
+                  </a>
                 )}
                 {!m.phone && !m.email && (
                   <div className="text-brand-gray text-xs">
@@ -460,7 +479,7 @@ function SyncPlan({
               </div>
             )}
             <div className="text-xs text-brand-gray pt-1">
-              Имя, специальность, телефон, email и фото берутся с сайта; ручные
+              Имя, специальность, телефон, email, резюме и фото берутся с сайта; ручные
               правки этих полей будут перезаписаны.
             </div>
           </div>
@@ -602,6 +621,12 @@ function ManagerForm({
       {field("Специальность", "role", "IT Account-менеджер Qmedia")}
       {field("Телефон", "phone", "+375 (29) 000-00-00")}
       {field("Email", "email", "name@qmedia.by", "email")}
+      {field(
+        "Ссылка на резюме",
+        "resumeUrl",
+        "https://www.qmedia.by/andrej_zhuk.html",
+        "url",
+      )}
       <div className="flex gap-2 pt-1">
         <button
           type="button"

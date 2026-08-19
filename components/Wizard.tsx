@@ -70,20 +70,28 @@ function remapMonths(
   return [...current, ...extra];
 }
 
-const STEPS = ["Параметры", "Направления", "Менеджер", "Генерация"];
+const STEPS = ["Параметры", "Направления", "Менеджер", "Project-менеджер", "Генерация"];
 
 const EMPTY_MANAGER: ProposalManager = {
   name: "",
   role: "",
   phone: "",
   email: "",
+  resumeUrl: "",
 };
 
+/**
+ * `id` переносим в КП намеренно: по нему при рендере PDF находится фото в
+ * таблице `manager_photos` (см. lib/pdf/photos.ts). Ручная правка любого поля
+ * отвязывает КП от справочника и сбрасывает `id` — иначе в КП было бы чужое фото.
+ */
 const toProposalManager = (m: Manager): ProposalManager => ({
+  id: m.id,
   name: m.name,
   role: m.role,
   phone: m.phone,
   email: m.email,
+  resumeUrl: m.resumeUrl,
 });
 
 /**
@@ -119,6 +127,11 @@ export default function Wizard({
   const [manager, setManager] = useState<ProposalManager>(() =>
     managers[0] ? toProposalManager(managers[0]) : EMPTY_MANAGER,
   );
+  // Project-менеджер выбирается независимо: КП часто готовит продавец, а ведёт
+  // проект другой человек. По умолчанию — «не указан».
+  const [pmId, setPmId] = useState<string | null>(null);
+  const [projectManager, setProjectManager] =
+    useState<ProposalManager>(EMPTY_MANAGER);
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,8 +170,18 @@ export default function Wizard({
   };
   // Ручная правка отвязывает от справочника: данные касаются только этого КП.
   const patchManager = (patch: Partial<ProposalManager>) => {
-    setManager((s) => ({ ...s, ...patch }));
+    setManager((s) => ({ ...s, ...patch, id: undefined }));
     setManagerId(null);
+    setSavedId(null);
+  };
+  const selectProjectManager = (m: Manager | null) => {
+    setPmId(m?.id ?? null);
+    setProjectManager(m ? toProposalManager(m) : EMPTY_MANAGER);
+    setSavedId(null);
+  };
+  const patchProjectManager = (patch: Partial<ProposalManager>) => {
+    setProjectManager((s) => ({ ...s, ...patch, id: undefined }));
+    setPmId(null);
     setSavedId(null);
   };
 
@@ -175,6 +198,7 @@ export default function Wizard({
           meta,
           // Менеджер без имени = не указан: PDF подставит контакты по умолчанию.
           manager: manager.name.trim() ? manager : undefined,
+          projectManager: projectManager.name.trim() ? projectManager : undefined,
         }),
       });
       if (!res.ok) {
@@ -223,6 +247,8 @@ export default function Wizard({
           )}
           {step === 2 && (
             <StepManager
+              title="Менеджер"
+              hint="Эти контакты попадут на обложку КП («Подготовлено») и в блок контактов. Выберите человека из справочника или укажите данные вручную."
               managers={managers}
               manager={manager}
               managerId={managerId}
@@ -231,11 +257,23 @@ export default function Wizard({
             />
           )}
           {step === 3 && (
+            <StepManager
+              title="Project-менеджер"
+              hint="Тот, кто будет вести проект. Попадёт на слайд «Project-менеджер» и в состав команды. Выбор независим от менеджера, подготовившего КП."
+              managers={managers}
+              manager={projectManager}
+              managerId={pmId}
+              onSelect={selectProjectManager}
+              onPatch={patchProjectManager}
+            />
+          )}
+          {step === 4 && (
             <StepReview
               input={input}
               directions={directions}
               meta={meta}
               manager={manager}
+              projectManager={projectManager}
               config={config}
               savedId={savedId}
               saving={saving}

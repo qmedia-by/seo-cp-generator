@@ -74,12 +74,25 @@ const metaSchema = z.object({
   notes: z.string().trim().max(5000).optional(),
 });
 
+/** Ссылка на резюме: только http(s) и только с сайта компании — или пусто. */
+const resumeUrlSchema = z
+  .string()
+  .trim()
+  .max(300)
+  .refine((v) => v === "" || /^https?:\/\//i.test(v), {
+    message: "Ссылка должна начинаться с http:// или https://",
+  })
+  .default("");
+
 /** Контакты менеджера в КП. Обязательно только имя — остальное можно не заполнять. */
 export const proposalManagerSchema = z.object({
   name: z.string().trim().min(1, "Укажите имя и фамилию").max(120),
   role: z.string().trim().max(120).default(""),
   phone: z.string().trim().max(60).default(""),
   email: z.string().trim().max(120).default(""),
+  resumeUrl: resumeUrlSchema,
+  // id справочника — ссылка на фото при рендере PDF, не обязателен.
+  id: z.string().trim().max(64).optional(),
 });
 
 /**
@@ -99,6 +112,7 @@ export const createProposalSchema = z.object({
   directions: z.array(directionSchema).min(1).max(5),
   meta: metaSchema.optional(),
   manager: proposalManagerSchema.optional(),
+  projectManager: proposalManagerSchema.optional(),
 });
 
 export type CreateProposalPayload = z.infer<typeof createProposalSchema>;

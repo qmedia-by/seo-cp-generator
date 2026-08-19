@@ -23,10 +23,17 @@ export const BRAND = {
 export const COMPANY = {
   name: "Qmedia",
   site: "qmedia.by",
-  siteUrl: "https://qmedia.by",
+  siteUrl: "https://www.qmedia.by/",
   foundedYear: 2007,
   clients: "3590+",
-  employees: 34,
+  employees: 48,
+  reviews: "80+",
+  projects: "2000",
+  /** Общий отдел продаж — подвал каждого слайда PDF и слайд контактов. */
+  phone: "+375 (29) 335-23-23",
+  phoneHref: "tel:+375293352323",
+  email: "sales@qmedia.by",
+  address: "Минск, ул. Притыцкого 2/3, 3 этаж, офис 23",
   /** Контактное лицо (account-менеджер) — из референса. */
   manager: {
     name: "Андрей Марушко",
@@ -35,6 +42,36 @@ export const COMPANY = {
     email: "am@qmedia.by",
   },
 } as const;
+
+/**
+ * Внешние адреса, на которые ссылается PDF. Собраны из презентации дизайнера —
+ * в макетах эти ссылки живые, и в выгрузке они должны остаться кликабельными.
+ */
+export const LINKS = {
+  clients: "https://www.qmedia.by/kejsy_i_klienty/klienty.html",
+  reviews: "https://www.qmedia.by/kejsy_i_klienty/otzyvy_klientov.html",
+  awards: "https://www.qmedia.by/o_kompanii/nashi_nagrady.html",
+  cases: "https://www.qmedia.by/kejsy_i_klienty/marketingovye_kejsy.html",
+  paidTools:
+    "https://www.qmedia.by/vyvedem_vash_biznes_na_novyj_uroven_s_pomoshhyu_digital-voronki.html#paid-tools",
+} as const;
+
+/** Соцсети и мессенджеры — слайд «Давайте начнём сотрудничать». */
+export const SOCIALS = [
+  { key: "telegram", title: "Telegram", url: "https://t.me/qmediaby" },
+  { key: "tiktok", title: "TikTok", url: "https://www.tiktok.com/@qmedia.by" },
+  {
+    key: "whatsapp",
+    title: "WhatsApp",
+    url: "https://api.whatsapp.com/send?phone=+375293352323",
+  },
+  { key: "facebook", title: "Facebook", url: "https://www.facebook.com/Qmedia.by" },
+  {
+    key: "instagram",
+    title: "Instagram",
+    url: "https://www.instagram.com/qmedia.by/",
+  },
+] as const;
 
 /**
  * Ресурсы бренда.
@@ -58,36 +95,3 @@ export const BRAND_ASSETS = {
   fontBold: "public/fonts/QmediaSans-Bold.ttf",
 } as const;
 
-/** Корпоративные фото (public-пути). Используются в PDF и на обложке. */
-export const PHOTOS = {
-  cover: "print-004.jpg", // переговорная с клиентом — для обложки КП
-  team: ["print-001.jpg", "print-003.jpg", "print-004.jpg", "print-012.jpg"],
-} as const;
-
-/**
- * Преимущества работы с Qmedia — слайд «Почему Qmedia».
- * Формулировки согласованы SEO-отделом (sources/SEO_CP_SLIDES.md); вводный и финальный
- * абзацы того же слайда — в `PITCH_WHY` (lib/pitch.ts).
- */
-export const ADVANTAGES: { title: string; text: string }[] = [
-  {
-    title: "Комплексный подход",
-    text: "Работаем не только с позициями, но и с контентом, репутацией, технической базой, аналитикой и AI-поиском.",
-  },
-  {
-    title: "Команда внутри агентства",
-    text: "Над проектом работают SEO-специалисты, программисты, копирайтеры, аналитики и Project-менеджер.",
-  },
-  {
-    title: "Прозрачность",
-    text: "Клиент видит, какие задачи выполнены, какие показатели изменились и что будет сделано дальше.",
-  },
-  {
-    title: "Опыт в разных нишах",
-    text: "Умеем адаптировать SEO под специфику бизнеса: от локальных услуг до крупных каталогов и B2B-проектов.",
-  },
-  {
-    title: "Работа на бизнес-цели",
-    text: "Наша задача — не просто вывести запросы в ТОП, а помочь сайту привлекать целевых пользователей и превращать их в обращения.",
-  },
-];

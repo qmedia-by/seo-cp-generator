@@ -33,6 +33,7 @@ export const DEFAULT_MANAGERS: Manager[] = [
     role: COMPANY.manager.role,
     phone: COMPANY.manager.phone,
     email: COMPANY.manager.email,
+    resumeUrl: "",
   },
 ];
 
@@ -118,6 +119,7 @@ function normalizeManagers(raw: unknown): Manager[] {
       role: str(m.role, 120),
       phone: str(m.phone, 60),
       email: str(m.email, 120),
+      resumeUrl: str(m.resumeUrl, 300),
     }))
     .filter((m) => m.name.length > 0)
     .slice(0, 50);

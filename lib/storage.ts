@@ -35,6 +35,7 @@ export function buildProposal(
     directions,
     meta: payload.meta,
     manager: payload.manager,
+    projectManager: payload.projectManager,
     calcSnapshot,
     calcConfig: config,
   };

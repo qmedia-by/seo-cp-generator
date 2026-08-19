@@ -4,6 +4,10 @@ import ManagerAvatar, { managerPhotoUrl } from "@/components/ManagerAvatar";
 import type { Manager, ProposalManager } from "@/lib/types";
 
 interface Props {
+  /** Заголовок шага: «Менеджер» или «Project-менеджер». */
+  title: string;
+  /** Пояснение, куда именно эти контакты попадут в КП. */
+  hint: string;
   /** Справочник из настроек (Настройки → Список менеджеров). */
   managers: Manager[];
   manager: ProposalManager;
@@ -13,7 +17,14 @@ interface Props {
   onPatch: (patch: Partial<ProposalManager>) => void;
 }
 
+/**
+ * Шаг выбора человека из справочника. Используется дважды и **независимо**:
+ * менеджер, подготовивший КП (обложка), и Project-менеджер проекта (свой
+ * слайд) — это, как правило, разные люди.
+ */
 export default function StepManager({
+  title,
+  hint,
   managers,
   manager,
   managerId,
@@ -25,12 +36,8 @@ export default function StepManager({
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-bold mb-1">Менеджер</h2>
-        <p className="text-sm text-brand-gray">
-          Эти контакты попадут в PDF: на обложку («Подготовил») и в блок контактов
-          в конце презентации. Выберите человека из справочника или укажите данные
-          вручную.
-        </p>
+        <h2 className="text-lg font-bold mb-1">{title}</h2>
+        <p className="text-sm text-brand-gray">{hint}</p>
       </div>
 
       <div>
@@ -132,6 +139,15 @@ export default function StepManager({
               value={manager.email}
               placeholder="name@qmedia.by"
               onChange={(e) => onPatch({ email: e.target.value })}
+              className="ui-input"
+            />
+          </Field>
+          <Field label="Ссылка на резюме">
+            <input
+              type="url"
+              value={manager.resumeUrl ?? ""}
+              placeholder="https://www.qmedia.by/andrej_zhuk.html"
+              onChange={(e) => onPatch({ resumeUrl: e.target.value })}
               className="ui-input"
             />
           </Field>

@@ -15,6 +15,7 @@ interface Props {
   directions: DirectionSelection[];
   meta: ProposalMeta;
   manager: ProposalManager;
+  projectManager: ProposalManager;
   config: CalcConfig;
   savedId: string | null;
   saving: boolean;
@@ -27,6 +28,7 @@ export default function StepReview({
   directions,
   meta,
   manager,
+  projectManager,
   config,
   savedId,
   saving,
@@ -210,27 +212,10 @@ export default function StepReview({
         </div>
       </div>
 
-      {/* Кто указан в КП: обложка PDF и блок контактов */}
-      <div>
-        <h3 className="text-sm font-bold uppercase tracking-wide text-brand-gray mb-2">
-          Менеджер
-        </h3>
-        {manager.name.trim() ? (
-          <div className="text-sm">
-            <span className="font-semibold">{manager.name}</span>
-            {manager.role && (
-              <span className="text-brand-gray"> · {manager.role}</span>
-            )}
-            <div className="text-brand-gray">
-              {[manager.phone, manager.email].filter(Boolean).join(" · ") ||
-                "контакты не указаны"}
-            </div>
-          </div>
-        ) : (
-          <div className="text-sm text-brand-gray">
-            Не указан — в КП попадут контакты по умолчанию.
-          </div>
-        )}
+      {/* Кто указан в КП: обложка PDF и слайд Project-менеджера */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <PersonSummary title="Менеджер" person={manager} />
+        <PersonSummary title="Project-менеджер" person={projectManager} />
       </div>
 
       {meta.notes && (
@@ -285,6 +270,39 @@ export default function StepReview({
         <p className="text-xs text-brand-gray -mt-3">
           Укажите название сайта на первом шаге.
         </p>
+      )}
+    </div>
+  );
+}
+
+/** Кто попал в КП на этой роли. Пусто — в PDF подставятся контакты по умолчанию. */
+function PersonSummary({
+  title,
+  person,
+}: {
+  title: string;
+  person: ProposalManager;
+}) {
+  return (
+    <div>
+      <h3 className="text-sm font-bold uppercase tracking-wide text-brand-gray mb-2">
+        {title}
+      </h3>
+      {person.name.trim() ? (
+        <div className="text-sm">
+          <span className="font-semibold">{person.name}</span>
+          {person.role && (
+            <span className="text-brand-gray"> · {person.role}</span>
+          )}
+          <div className="text-brand-gray">
+            {[person.phone, person.email].filter(Boolean).join(" · ") ||
+              "контакты не указаны"}
+          </div>
+        </div>
+      ) : (
+        <div className="text-sm text-brand-gray">
+          Не указан — в КП попадут контакты по умолчанию.
+        </div>
       )}
     </div>
   );

@@ -167,6 +167,15 @@ describe("parseQmediaManagers", () => {
     ]);
   });
 
+  it("берёт ссылку на резюме из адреса вокруг аватарки", () => {
+    expect(parsed.map((m) => m.resumeUrl)).toEqual([
+      "https://www.qmedia.by/andrej_zhuk.html",
+      "https://www.qmedia.by/darya_papovich.html",
+      "",
+      "",
+    ]);
+  });
+
   it("карточка без фото не ломает разбор", () => {
     expect(parsed[2].name).toBe("Евгений Лащевский");
     expect(parsed[2].photoUrl).toBe("");
@@ -202,6 +211,7 @@ describe("mergeManagersFromSite", () => {
       role: "IT account-менеджер Qmedia",
       phone: "+375 (29) 000-00-00",
       email: "andrey@qmedia.by",
+      resumeUrl: "",
     },
     {
       id: "b",
@@ -209,6 +219,7 @@ describe("mergeManagersFromSite", () => {
       role: "IT account-менеджер",
       phone: "+375 (44) 707-33-15",
       email: "darya@qmedia.by",
+      resumeUrl: "https://www.qmedia.by/darya_papovich.html",
     },
     {
       id: "c",
@@ -216,6 +227,7 @@ describe("mergeManagersFromSite", () => {
       role: "",
       phone: "",
       email: "old@qmedia.by",
+      resumeUrl: "",
     },
   ];
 
@@ -262,6 +274,7 @@ describe("mergeManagersFromSite", () => {
       role: "Project менеджер (web-разработка)",
       phone: "+375 (29) 635-23-23",
       email: "evg.qm@qmedia.by",
+      resumeUrl: "",
     });
   });
 
@@ -278,13 +291,26 @@ describe("mergeManagersFromSite", () => {
           role: "Директор",
           phone: "+375 (29) 111-11-11",
           email: "a@b.by",
+          resumeUrl: "https://www.qmedia.by/andrej_zhuk.html",
         },
       ],
-      [{ name: "Андрей Жук", role: "", phone: "", email: "", photoUrl: "" }],
+      [
+        {
+          name: "Андрей Жук",
+          role: "",
+          phone: "",
+          email: "",
+          photoUrl: "",
+          resumeUrl: "",
+        },
+      ],
     );
     expect(kept.managers[0].role).toBe("Директор");
     expect(kept.managers[0].phone).toBe("+375 (29) 111-11-11");
     expect(kept.managers[0].email).toBe("a@b.by");
+    expect(kept.managers[0].resumeUrl).toBe(
+      "https://www.qmedia.by/andrej_zhuk.html",
+    );
     expect(kept.unchanged).toEqual(["Андрей Жук"]);
   });
 
@@ -301,7 +327,16 @@ describe("mergeManagersFromSite", () => {
 
   it("сообщает, когда применять нечего", () => {
     const same = mergeManagersFromSite(
-      [{ id: "a", name: "Андрей Жук", role: "", phone: "+375 (29) 1", email: "a@b.by" }],
+      [
+        {
+          id: "a",
+          name: "Андрей Жук",
+          role: "",
+          phone: "+375 (29) 1",
+          email: "a@b.by",
+          resumeUrl: "",
+        },
+      ],
       [
         {
           name: "Андрей Жук",
@@ -309,6 +344,7 @@ describe("mergeManagersFromSite", () => {
           phone: "+375 (29) 1",
           email: "a@b.by",
           photoUrl: "",
+          resumeUrl: "",
         },
       ],
     );
@@ -330,6 +366,7 @@ describe("mergeManagersFromSite: фото", () => {
       phone: "+375 (29) 111-11-11",
       email: "a@b.by",
       photoUrl: URL_A,
+      resumeUrl: "",
     },
   ];
   const currentOne = (photoVersionValue?: string): Manager[] => [
@@ -339,6 +376,7 @@ describe("mergeManagersFromSite: фото", () => {
       role: "Директор",
       phone: "+375 (29) 111-11-11",
       email: "a@b.by",
+      resumeUrl: "",
       ...(photoVersionValue ? { photoVersion: photoVersionValue } : {}),
     },
   ];
