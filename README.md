@@ -169,9 +169,10 @@ echo 'DATABASE_URL="postgres://postgres:test@localhost:5432/seocp"' > .env.local
   одинокого слова.
 - Ссылки в PDF живые: телефон и почта в подвале, соцсети и мессенджеры, разделы сайта,
   кейсы, «Смотреть резюме» у Project-менеджера.
-- Шрифт — PT Sans (OFL, с кириллицей) в `public/fonts/QmediaSans-*.ttf` (Regular, Bold,
-  Italic, BoldItalic): в PDF регистрируется в `lib/pdf/theme.ts`, в вебе подключён через
-  `@font-face` в `globals.css`. В макетах Verdana, но она проприетарная.
+- Шрифт PDF — **Verdana** (`public/fonts/Verdana*.ttf`: Verdana.ttf, Bold, Italic,
+  BoldItalic), тот же, что в макетах дизайнера и в остальных презентациях Qmedia;
+  регистрируется в `lib/pdf/theme.ts`. Веб-интерфейс остался на PT Sans под именем
+  QmediaSans (`public/fonts/QmediaSans-*.ttf`, `@font-face` в `globals.css`).
 
 ## Принятые решения и допущения
 

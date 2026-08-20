@@ -6,17 +6,26 @@ import { Image, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { LINKS } from "../../company";
 import { PITCH_CHEAP, PITCH_EXPECTATIONS, PITCH_GUARANTEES, PITCH_TOOLS } from "../../pitch";
 import { ICON, TOOL_LOGO } from "../assets";
-import { Cursor, PillLink, Slide, SlideHead, rich } from "../primitives";
+import { Cursor, PillLink, Slide, SlideHead, SumText, rich } from "../primitives";
 import { clean, DECK, platePadding, R } from "../theme";
+
+/** Кегль «от 30 000 $» на жёлтой плашке слайда инструментария. */
+const INVEST_FS = 30;
 
 const s = StyleSheet.create({
   // --- Гарантируем передовые решения ---
   guaranteeRow: { flexDirection: "row", flexGrow: 1, alignItems: "center" },
-  guaranteeLeft: { width: "40%", paddingRight: 20 },
-  guaranteeRight: { flex: 1, paddingRight: 34 },
+  /**
+   * Ширина под заголовок: «==передовые решения:==» должно идти одной строкой
+   * (правка заказчика от 20.08.2026), а в Verdana оно шире, чем в PT Sans.
+   */
+  guaranteeLeft: { width: "45%", paddingRight: 20 },
+  // Правое поле узкое: левую колонку забрал заголовок (см. `guaranteeLeft`),
+  // а строки пунктов должны оставаться в две строки, а не в три.
+  guaranteeRight: { flex: 1, paddingRight: 18 },
   iconItem: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
   icon: { width: 50, height: 50, marginRight: 18 },
-  iconText: { flex: 1, fontSize: 12, lineHeight: 1.4 },
+  iconText: { flex: 1, fontSize: 11, lineHeight: 1.4 },
 
   // --- Что мы ожидаем от вас ---
   /**
@@ -63,22 +72,22 @@ const s = StyleSheet.create({
   // --- Платный инструментарий ---
   toolsRow: { flexDirection: "row", marginTop: 2 },
   toolsCol: { flex: 1, paddingRight: 14 },
-  toolGroupTitle: { fontSize: 9, fontWeight: 700, color: DECK.ink, marginBottom: 3 },
+  toolGroupTitle: { fontSize: 8.4, fontWeight: 700, color: DECK.ink, marginBottom: 2 },
   // Ряды разнесены: в макете между группами заметный воздух, а у нас снизу
   // оставалось пустое место (правка заказчика «увеличь gaps между рядами»).
-  toolRow: { flexDirection: "row", marginBottom: 11 },
+  toolRow: { flexDirection: "row", marginBottom: 10 },
   tool: { flex: 1, alignItems: "center", paddingHorizontal: 3 },
-  toolLogo: { width: 30, height: 30, marginBottom: 2, objectFit: "contain" },
-  toolName: { fontSize: 6.8, fontWeight: 700, color: DECK.black, textAlign: "center", lineHeight: 1.2 },
+  toolLogo: { width: 29, height: 29, marginBottom: 2, objectFit: "contain" },
+  toolName: { fontSize: 6.6, fontWeight: 700, color: DECK.black, textAlign: "center", lineHeight: 1.2 },
   toolText: {
-    fontSize: 4.9,
+    fontSize: 4.6,
     fontStyle: "italic",
     color: DECK.greyLight,
     textAlign: "center",
-    lineHeight: 1.25,
+    lineHeight: 1.2,
   },
 
-  invest: { width: 200, alignItems: "center" },
+  invest: { width: 212, alignItems: "center" },
   investLead: { fontSize: 11, fontWeight: 700, textAlign: "center", marginBottom: 6 },
   investPlate: {
     backgroundColor: DECK.yellow,
@@ -86,8 +95,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: "center",
   },
-  investFrom: { fontSize: 14, color: DECK.black, lineHeight: 1 },
-  investAmount: { fontSize: 34, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  investAmount: { fontWeight: 700, color: DECK.black },
   investNote: {
     fontSize: 8.5,
     fontWeight: 700,
@@ -104,7 +112,7 @@ export function GuaranteesSlide() {
     <Slide>
       <View style={s.guaranteeRow}>
         <View style={s.guaranteeLeft}>
-          <SlideHead title={PITCH_GUARANTEES.title} size={24} />
+          <SlideHead title={PITCH_GUARANTEES.title} size={21} />
         </View>
         <View style={s.guaranteeRight}>
           {PITCH_GUARANTEES.items.map((it) => (
@@ -157,8 +165,12 @@ export function CheapSlide() {
           </View>
         ))}
       </View>
+      {/* Распорка + нижний отступ: `flexGrow` один прижимал бы вывод вплотную
+          к подвалу (правка заказчика от 20.08.2026). */}
       <View style={{ flexGrow: 1 }} />
-      <Text style={s.cheapClosing}>{clean(PITCH_CHEAP.closing)}</Text>
+      <Text style={[s.cheapClosing, { marginBottom: 18 }]}>
+        {clean(PITCH_CHEAP.closing)}
+      </Text>
     </Slide>
   );
 }
@@ -202,13 +214,18 @@ export function ToolsSlide() {
 
         <View style={s.invest}>
           <Text style={s.investLead}>{PITCH_TOOLS.investLead}</Text>
-          <View style={[s.investPlate, platePadding(34, 8)]}>
-            <Text style={s.investFrom}>{PITCH_TOOLS.investPrefix}</Text>
-            <Text style={s.investAmount}>{PITCH_TOOLS.investAmount}</Text>
+          {/* «от» и сумма — одной строкой (правка заказчика от 20.08.2026):
+              приставка мельче цифры, но на той же базовой линии. */}
+          <View style={[s.investPlate, platePadding(INVEST_FS, 8)]}>
+            <SumText
+              text={`${PITCH_TOOLS.investPrefix} ${PITCH_TOOLS.investAmount}`}
+              size={INVEST_FS}
+              style={s.investAmount}
+            />
           </View>
           <Text style={s.investNote}>{clean(PITCH_TOOLS.investNote)}</Text>
           <View style={s.investCta}>
-            <PillLink href={LINKS.paidTools} size={9}>
+            <PillLink href={LINKS.paidTools} size={8}>
               {PITCH_TOOLS.moreLabel}
             </PillLink>
             <Cursor size={24} style={{ marginLeft: -6, marginBottom: -10 }} />

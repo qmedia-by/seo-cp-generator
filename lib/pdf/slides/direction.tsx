@@ -16,7 +16,7 @@ import {
 } from "../../format";
 import type { PitchDirection } from "../../pitch";
 import type { DirectionScheduleCalc, DirectionSelection } from "../../types";
-import { Bullets, HlLine, Kicker, NoteBox, Slide, SlideHead } from "../primitives";
+import { Bullets, HlLine, Kicker, NoteBox, Slide, SlideHead, SumText } from "../primitives";
 import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
@@ -43,7 +43,7 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
 
-  cols: { flexDirection: "row", gap: 18, marginTop: 8 },
+  cols: { flexDirection: "row", gap: 16, marginTop: 6 },
   col: { flex: 1 },
   defsCol: { width: 138 },
   /** Только цвет и начертание: вертикаль задаёт `plateText` внутри `HlLine`. */
@@ -52,18 +52,26 @@ const s = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: DECK.yellow,
     borderRadius: R.md,
-    padding: 9,
-    marginBottom: 12,
+    padding: 8,
+    marginBottom: 9,
   },
-  defText: { fontSize: 9.5, lineHeight: 1.35 },
+  defText: { fontSize: 8.6, lineHeight: 1.3 },
 
   // --- Лист состава работ ---
   banner: {
     flexDirection: "row",
     backgroundColor: DECK.fact,
     borderRadius: R.md,
-    paddingVertical: 5,
-    marginBottom: 5,
+    /**
+     * Поля неравные намеренно. Сверху над прописными подписи ячейки почти нет
+     * пустоты (`CAP_TOP_RATIO × 7.5` ≈ 2 pt), а снизу под последней строкой
+     * остаётся хвост строчной коробки — при равных paddings воздух выходил
+     * 5.9 pt сверху против 11.2 pt снизу (замер рендера, правка заказчика от
+     * 20.08.2026). Разницу переносим сверху вниз.
+     */
+    paddingTop: 7,
+    paddingBottom: 1.5,
+    marginBottom: 4,
   },
   bannerCell: { flex: 1, paddingHorizontal: 12 },
   bannerDivider: { borderLeftWidth: 1, borderLeftColor: DECK.white },
@@ -80,9 +88,9 @@ const s = StyleSheet.create({
     borderRadius: R.md,
     paddingHorizontal: 9,
   },
-  sumText: { fontSize: 15, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  bannerValue: { fontSize: 13, fontWeight: 700, color: DECK.ink, lineHeight: 1.1 },
-  bannerSub: { fontSize: 8, color: DECK.muted, marginTop: 2 },
+  sumText: { fontWeight: 700, color: DECK.black },
+  bannerValue: { fontSize: 11.5, fontWeight: 700, color: DECK.ink, lineHeight: 1.1 },
+  bannerSub: { fontSize: 7.5, color: DECK.muted, marginTop: 2 },
   strike: { textDecoration: "line-through", color: DECK.muted },
 
   monthDots: { flexDirection: "row", marginTop: 5 },
@@ -96,14 +104,17 @@ const s = StyleSheet.create({
   dotOn: { backgroundColor: DECK.green },
 
   workGrid: { flexDirection: "row", flexWrap: "wrap" },
-  workCell: { paddingRight: 6 },
-  workCard: { backgroundColor: DECK.card, borderRadius: R.md, padding: 5 },
-  workHead: { fontSize: 7.8, fontWeight: 700, color: DECK.ink, lineHeight: 1.2 },
-  workDesc: { fontSize: 6.6, color: DECK.grey, lineHeight: 1.2, marginTop: 2 },
+  workCell: { paddingRight: 5 },
+  workCard: { backgroundColor: DECK.card, borderRadius: R.md, padding: 4 },
+  workHead: { fontSize: 7.2, fontWeight: 700, color: DECK.ink, lineHeight: 1.15 },
+  workDesc: { fontSize: 6.1, color: DECK.grey, lineHeight: 1.15, marginTop: 2 },
 });
 
+/** Кегль суммы в баннере состава работ; тем же числом кормится `platePadding`. */
+const SUM_FS = 13.5;
+
 /** Кегль шапки правой колонки («Результат для бизнеса …помогает…»). */
-const RESULT_TITLE_FS = 11.5;
+const RESULT_TITLE_FS = 10.5;
 
 /** Плашка со сроком направления — связывает описание со сметой. */
 function DirectionBadge({ calc }: { calc?: DirectionScheduleCalc }) {
@@ -132,8 +143,8 @@ export function DirectionAboutSlide({
   // строки в двух оставшихся колонках ломаются чаще, и при общем кегле лист
   // перестаёт помещаться в 405 pt. Поэтому такой слайд идёт плотнее.
   const dense = !!pitch.defs;
-  const bulletSize = dense ? 10 : 11;
-  const bulletGap = dense ? 8 : 12;
+  const bulletSize = dense ? 9 : 10;
+  const bulletGap = dense ? 7.5 : 11;
 
   return (
     <Slide>
@@ -151,7 +162,7 @@ export function DirectionAboutSlide({
 
       <View style={s.cols}>
         <View style={s.col}>
-          <Kicker style={{ fontSize: 11.5, marginBottom: 8 }}>{pitch.doTitle}</Kicker>
+          <Kicker style={{ fontSize: 10.5, marginBottom: 6 }}>{pitch.doTitle}</Kicker>
           <Bullets items={pitch.does} size={bulletSize} gap={bulletGap} />
         </View>
 
@@ -168,8 +179,8 @@ export function DirectionAboutSlide({
             />
           ))}
           <Bullets items={pitch.results} size={bulletSize} gap={bulletGap} />
-          <View style={{ height: dense ? 10 : 14 }} />
-          <NoteBox size={dense ? 9.5 : 10.5} style={{ paddingVertical: 11, paddingHorizontal: 12 }}>
+          <View style={{ height: dense ? 9 : 13 }} />
+          <NoteBox size={dense ? 9 : 10} style={{ paddingVertical: 10, paddingHorizontal: 12 }}>
             {pitch.note}
           </NoteBox>
         </View>
@@ -232,23 +243,27 @@ export function DirectionWorksSlide({
   // отступом между рядами. Растёт только отступ, а не кегль: высота карточки
   // зависит от длины работы (её правят в настройках), и подгонять под неё
   // размеры значило бы гадать. Четыре ряда — потолок листа, там воздуха нет.
-  const rowGap = [22, 22, 12, 4][Math.min(Math.ceil(direction.works.length / cols), 4) - 1];
+  const rowGap = [22, 21, 18, 2][Math.min(Math.ceil(direction.works.length / cols), 4) - 1];
 
   return (
     <Slide>
       <SlideHead
         title={direction.name}
         subtitle={direction.goal}
-        size={20}
-        subSize={11}
-        subGap={6}
+        size={18}
+        subSize={10}
+        subGap={5}
       />
 
       <View style={s.banner} wrap={false}>
         <View style={s.bannerCell}>
           <Text style={s.bannerLabel}>Стоимость в месяц</Text>
-          <View style={[s.sumPlate, platePadding(15, 5)]}>
-            <Text style={s.sumText}>{formatMonthlyMoney(calc.pricePerMonth)}</Text>
+          <View style={[s.sumPlate, platePadding(SUM_FS, 4)]}>
+            <SumText
+              text={formatMonthlyMoney(calc.pricePerMonth)}
+              size={SUM_FS}
+              style={s.sumText}
+            />
           </View>
           {discounted && (
             <Text style={s.bannerSub}>
@@ -286,7 +301,7 @@ export function DirectionWorksSlide({
         </View>
       </View>
 
-      <Kicker style={{ fontSize: 10, marginBottom: 3 }}>Состав работ</Kicker>
+      <Kicker style={{ fontSize: 9, marginBottom: 3 }}>Состав работ</Kicker>
       <View style={s.workGrid}>
         {direction.works.map((w, i) => {
           const { head, rest } = splitWork(w.text);

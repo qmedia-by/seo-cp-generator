@@ -34,12 +34,15 @@ export function formatHours(value: number): string {
  *
  * `values` — значения по активным месяцам; нули (месяц без работ) отбрасываем.
  */
+/** Приставка «платёж различается по месяцам» — одна на форматирование и разбор. */
+const FROM_PREFIX = "от ";
+
 function formatPerMonth(values: number[], fmt: (v: number) => string): string {
   const paid = values.filter((v) => v > 0);
   if (paid.length === 0) return "—";
   const min = Math.min(...paid);
   const max = Math.max(...paid);
-  return min === max ? fmt(min) : `от ${fmt(min)}`;
+  return min === max ? fmt(min) : `${FROM_PREFIX}${fmt(min)}`;
 }
 
 /** «5 952,00 BYN» / «от 4 100,00 BYN» — платёж за один месяц. */
@@ -55,6 +58,17 @@ export function formatMonthlyAmount(values: number[]): string {
 /** «62 ч» / «от 45 ч» — объём работ за один месяц. */
 export function formatMonthlyHours(values: number[]): string {
   return formatPerMonth(values, formatHours);
+}
+
+/**
+ * Разбор помесячной величины на приставку «от» и само число. Нужен PDF: «от» —
+ * уточнение («в разные месяцы по-разному»), а не часть суммы, и на плашке идёт
+ * мельче цифры (см. `SumText` в lib/pdf/primitives.tsx).
+ */
+export function splitFromPrefix(text: string): { from: boolean; value: string } {
+  return text.startsWith(FROM_PREFIX)
+    ? { from: true, value: text.slice(FROM_PREFIX.length) }
+    : { from: false, value: text };
 }
 
 export function formatDate(iso: string): string {

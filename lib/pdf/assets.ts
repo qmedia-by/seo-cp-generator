@@ -93,25 +93,25 @@ export const TOOL_LOGO = {
 
 /** Награды «Рейтинга Рунета», логотипы клиентов, сканы отзывов, обложки кейсов. */
 export const AWARD = [
-  deck("award-seo.jpg"),
-  deck("award-ppc.jpg"),
-  deck("award-dev.jpg"),
+  deck("award-seo.png"),
+  deck("award-ppc.png"),
+  deck("award-dev.png"),
 ] as const;
 
 export const CLIENTS_LOGOS = deck("clients-logos.png");
 
 export const REVIEWS = [
-  deck("review-1.jpg"),
+  deck("review-1.png"),
   deck("review-2.jpg"),
-  deck("review-3.jpg"),
+  deck("review-3.png"),
   deck("review-4.jpg"),
-  deck("review-5.jpg"),
+  deck("review-5.png"),
 ] as const;
 
 export const CASE_COVER = {
-  lingerie: deck("case-lingerie.jpg"),
-  running: deck("case-running.jpg"),
-  medical: deck("case-medical.jpg"),
+  lingerie: deck("case-lingerie.png"),
+  running: deck("case-running.png"),
+  medical: deck("case-medical.png"),
 } as const;
 
 export const MAP_OFFICE = deck("map-office.jpg");

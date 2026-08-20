@@ -20,8 +20,11 @@ import {
   pluralMonths,
 } from "../../format";
 import type { ProposalInput, ScheduleResult } from "../../types";
-import { Slide, SlideHead } from "../primitives";
+import { Slide, SlideHead, SumText } from "../primitives";
 import { DECK, platePadding, R } from "../theme";
+
+/** Кегль платежа в месяц на жёлтой плашке; им же кормится `platePadding`. */
+const COST_PLATE_FS = 19;
 
 const s = StyleSheet.create({
   cols: { flexDirection: "row", gap: 18, marginBottom: 4 },
@@ -59,7 +62,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 11,
     marginBottom: 6,
   },
-  costPlateText: { fontSize: 19, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  costPlateText: { fontWeight: 700, color: DECK.black },
   costLine: { flexDirection: "row", justifyContent: "space-between", marginTop: 1 },
   costLineLabel: { fontSize: 8, color: DECK.ink, lineHeight: 1.25 },
   costLineValue: { fontSize: 8, fontWeight: 700, color: DECK.ink, lineHeight: 1.25 },
@@ -173,8 +176,12 @@ export function EstimateSlide({
           <Text style={s.sectionTitle}>Стоимость</Text>
           <View style={s.costCard}>
             <Text style={s.costLabel}>Платёж в месяц</Text>
-            <View style={[s.costPlate, platePadding(19, 6)]}>
-              <Text style={s.costPlateText}>{formatMonthlyMoney(monthlyPrices)}</Text>
+            <View style={[s.costPlate, platePadding(COST_PLATE_FS, 6)]}>
+              <SumText
+                text={formatMonthlyMoney(monthlyPrices)}
+                size={COST_PLATE_FS}
+                style={s.costPlateText}
+              />
             </View>
             {calc.totalDiscount > 0 && (
               <>

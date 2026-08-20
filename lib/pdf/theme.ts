@@ -97,21 +97,28 @@ export const R = { sm: 3, md: 6, lg: 10, pill: 999 } as const;
 const FONT_DIR = path.join(process.cwd(), "public", "fonts");
 
 /**
- * PT Sans (OFL) под именем QmediaSans. Verdana из макета проприетарна и
- * отгружаться не может.
+ * Verdana — шрифт макетов дизайнера и всех презентаций Qmedia. Файлы лежат
+ * в `public/fonts` (Verdana 5.0x, с кириллицей); раньше здесь был PT Sans под
+ * именем QmediaSans — свободная замена, пока лицензионных файлов не было.
+ *
+ * 🛑 Файл обычного начертания называется `Verdana.ttf`, без суффикса `-Regular`.
  *
  * Курсив в макетах встречается часто (подписи фактов, формат отчётности,
  * описания инструментов), а react-pdf курсив **не синтезирует** — без файла
  * начертания рендер падает с «Could not resolve font».
+ *
+ * 🛑 Verdana заметно шире PT Sans: та же строка занимает на ~20% больше места
+ * в обычном начертании и на ~33% — в жирном. Кегли и отступы колоды подогнаны
+ * уже под неё; правишь их — перепроверяй пагинацию (см. «Структура PDF»).
  */
 Font.register({
-  family: "QmediaSans",
+  family: "Verdana",
   fonts: [
-    { src: path.join(FONT_DIR, "QmediaSans-Regular.ttf") },
-    { src: path.join(FONT_DIR, "QmediaSans-Bold.ttf"), fontWeight: 700 },
-    { src: path.join(FONT_DIR, "QmediaSans-Italic.ttf"), fontStyle: "italic" },
+    { src: path.join(FONT_DIR, "Verdana.ttf") },
+    { src: path.join(FONT_DIR, "Verdana-Bold.ttf"), fontWeight: 700 },
+    { src: path.join(FONT_DIR, "Verdana-Italic.ttf"), fontStyle: "italic" },
     {
-      src: path.join(FONT_DIR, "QmediaSans-BoldItalic.ttf"),
+      src: path.join(FONT_DIR, "Verdana-BoldItalic.ttf"),
       fontStyle: "italic",
       fontWeight: 700,
     },
@@ -144,24 +151,46 @@ Font.registerHyphenationCallback((word) => {
   return parts.flatMap((part) => (part.endsWith("-") ? [part, ""] : [part]));
 });
 
-export const FONT = "QmediaSans";
+export const FONT = "Verdana";
+
+// --- Метрики шрифта --------------------------------------------------------
+
+/**
+ * Где стоит глиф внутри строчной коробки. Числа берутся прямо из таблиц
+ * шрифта: `hhea.ascent` и `OS/2.capHeight` (для Verdana — 2059 и 1489 при
+ * `unitsPerEm` 2048).
+ *
+ * При `lineHeight: 1` react-pdf сажает базовую линию ровно на
+ * `ASCENT_RATIO × кегль` ниже верха коробки, а `lineHeight` растягивает
+ * коробку только ВНИЗ — поэтому верх прописных от него **не зависит**:
+ *
+ *   • верх прописных — на `CAP_TOP_RATIO × кегль` ниже верха коробки;
+ *   • высота прописных — `CAP_RATIO × кегль`.
+ *
+ * Проверено пиксельным замером рендера в 300 dpi на кеглях 120 и 200 (там
+ * квантование пренебрежимо): замер совпал с расчётом до 0.001.
+ *
+ * Отсюда считаются `GLYPH_SINK_RATIO` и `plateText`. Меняешь шрифт — меняй
+ * эти два числа, остальное пересчитается само.
+ */
+const ASCENT_RATIO = 2059 / 2048;
+const CAP_RATIO = 1489 / 2048;
+const CAP_TOP_RATIO = ASCENT_RATIO - CAP_RATIO;
 
 // --- Оптическое центрирование ----------------------------------------------
 
 /**
- * При `lineHeight: 1` react-pdf сажает базовую линию почти на низ строчного
- * бокса, поэтому глиф оказывается НИЖЕ центра плашки на `0.164 × кегль` — и при
- * `justifyContent: "center"`, и при симметричных paddings. Компенсируем нижним
- * отступом: он увеличивает бокс снизу и поднимает глиф на половину своей
- * величины, отсюда множитель 2.
- *
- * Коэффициент выверен пиксельным замером рендера на кеглях 8 / 10.5 / 14
- * (смещение строго пропорционально кеглю).
+ * При `lineHeight: 1` полоса прописных стоит в строчной коробке несимметрично,
+ * поэтому глиф оказывается НИЖЕ центра плашки — и при `justifyContent:
+ * "center"`, и при симметричных paddings. Смещение = центр полосы прописных
+ * минус центр коробки (для Verdana ≈0.141 кегля, у прежнего PT Sans было
+ * ≈0.164). Компенсируем нижним отступом: он увеличивает бокс снизу и поднимает
+ * глиф на половину своей величины, отсюда множитель 2.
  *
  * 🛑 Хелперы работают ТОЛЬКО вместе с `lineHeight: 1`. При унаследованном 1.4
  * глиф, наоборот, встаёт чуть выше центра, и поправка удваивает ошибку.
  */
-export const GLYPH_SINK_RATIO = 0.1638;
+export const GLYPH_SINK_RATIO = CAP_TOP_RATIO + CAP_RATIO / 2 - 0.5;
 
 /** Для flex-центрирования (кружки нумерации). */
 export function opticalCenter(fontSize: number) {
@@ -177,26 +206,25 @@ export function platePadding(fontSize: number, pad: number) {
   return { paddingTop: pad - sink, paddingBottom: pad + sink };
 }
 
+/**
+ * Отступ, при котором строка кегля `size` встаёт **верхом прописных** вровень
+ * со строкой кегля `base` в том же флекс-ряду.
+ *
+ * 🛑 Нужно там, где в одном ряду соседствуют разные кегли: react-pdf на таком
+ * ряду игнорирует `alignItems`, а верх прописных отстоит от верха строчной
+ * коробки на `CAP_TOP_RATIO × кегль` — то есть у крупной строки больше. Разница
+ * этих отступов и есть поправка (для крупной ячейки она отрицательная).
+ */
+export function alignCapTop(base: number, size: number) {
+  return CAP_TOP_RATIO * (base - size);
+}
+
 /** `top` для абсолютной строки, чтобы она встала по центру полосы высотой `h`. */
 export function centerTextTop(h: number, fontSize: number) {
   return h / 2 - (fontSize / 2 + GLYPH_SINK_RATIO * fontSize);
 }
 
 // --- Жёлтая плашка вокруг строки ------------------------------------------
-
-/**
- * Где стоит глиф внутри строчной коробки — замерено рендером в 300 dpi
- * (PT Sans, кегли 11.5 / 16 / 28, коэффициенты совпали до сотых):
- *
- *   • верх прописных — на `CAP_TOP_RATIO × кегль` ниже верха коробки, и от
- *     `lineHeight` это расстояние **не зависит**: `lineHeight` растягивает
- *     коробку только ВНИЗ;
- *   • высота прописных — `CAP_RATIO × кегль`.
- *
- * Из этого и собирается `plateText`.
- */
-const CAP_TOP_RATIO = 0.303;
-const CAP_RATIO = 0.72;
 
 /**
  * Воздух над прописными и под базовой линией в жёлтой плашке, в долях кегля.
@@ -233,7 +261,7 @@ export function plateLineHeight(fontSize: number) {
 }
 
 /**
- * Подготовка строки к выводу: в PT Sans нет глифов стрелок (заменяем на тире),
+ * Подготовка строки к выводу: в Verdana нет глифов стрелок (заменяем на тире),
  * плюс типографика — неразрывные пробелы против висячих предлогов и одиноких
  * слов в конце абзаца (см. lib/pdf/typography.ts).
  *

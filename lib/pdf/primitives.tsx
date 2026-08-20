@@ -20,7 +20,9 @@ import {
 } from "@react-pdf/renderer";
 import { COMPANY } from "../company";
 import { LOGO, ICON, Q_MARK } from "./assets";
+import { splitFromPrefix } from "../format";
 import {
+  alignCapTop,
   centerTextTop,
   clean,
   DECK,
@@ -530,6 +532,44 @@ export function HlLine({
  * Шапка слайда: чёрный заголовок и, если нужно, вторая строка на жёлтой плашке.
  * `size` подгоняет кегль заголовка под длину строки (в макете 25…32 pt).
  */
+/**
+ * Воздух между строками заголовка, в долях кегля. Мал потому, что высоту самой
+ * строки задаёт геометрия плашки (`plateText`): над прописными и под базовой
+ * линией уже есть по `PLATE_GAP_RATIO` кегля с каждой стороны, и междустрочие
+ * складывается из них тоже. Было 0.19 — заказчик попросил плотнее (20.08.2026).
+ */
+const HEAD_LINE_GAP_RATIO = 0.05;
+
+/**
+ * Крупная сумма на жёлтой плашке.
+ *
+ * Приставку «от» (платёж различается по месяцам) даём мельче цифры: это
+ * уточнение, а не часть суммы — правка заказчика от 20.08.2026. Приставка идёт
+ * отдельным inline-`<Text>`: соседние runs внутри одного `<Text>` react-pdf
+ * сажает на общую базовую линию, поэтому разный кегль строку не перекашивает.
+ */
+export function SumText({
+  text,
+  size,
+  style,
+}: {
+  /** Готовая строка из `formatMonthly*` — с приставкой «от » или без неё. */
+  text: string;
+  size: number;
+  style?: Sx;
+}) {
+  const { from, value } = splitFromPrefix(text);
+  return (
+    <Text style={[{ fontSize: size, lineHeight: 1 }, style ?? {}]}>
+      {from && <Text style={{ fontSize: size * FROM_PREFIX_RATIO }}>от </Text>}
+      {value}
+    </Text>
+  );
+}
+
+/** Во сколько раз приставка «от» мельче самой суммы. */
+const FROM_PREFIX_RATIO = 0.62;
+
 export function SlideHead({
   title,
   subtitle,
@@ -551,7 +591,7 @@ export function SlideHead({
   // Междустрочие: высоту строки задаёт геометрия плашки (`plateText`), а воздух
   // между строками добавляем отступом — так расстояние между базовыми линиями
   // одинаково и у строк с жёлтым выделением, и без него.
-  const lineGap = size * 0.19;
+  const lineGap = size * HEAD_LINE_GAP_RATIO;
   return (
     <View style={style ?? {}}>
       {/* Каждая строка — отдельный узел: перевод строки внутри одного `<Text>`

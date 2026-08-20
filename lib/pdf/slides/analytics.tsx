@@ -11,7 +11,7 @@ import { Bullets, Kicker, Slide, SlideHead } from "../primitives";
 import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
-  cols: { flexDirection: "row", gap: 16, marginTop: 8 },
+  cols: { flexDirection: "row", gap: 14, marginTop: 6 },
   col: { flex: 1 },
   groupHead: {
     backgroundColor: DECK.green,
@@ -21,7 +21,7 @@ const s = StyleSheet.create({
   },
   groupTitle: { fontSize: 11, fontWeight: 700, color: DECK.white, lineHeight: 1 },
 
-  reportHead: { flexDirection: "row", alignItems: "center", marginTop: 11 },
+  reportHead: { flexDirection: "row", alignItems: "center", marginTop: 10 },
   reportBar: {
     width: 3.5,
     height: 14,
@@ -29,12 +29,12 @@ const s = StyleSheet.create({
     borderRadius: 1.5,
     marginRight: 8,
   },
-  reportTitle: { fontSize: 11, fontWeight: 700, color: DECK.ink },
+  reportTitle: { fontSize: 10, fontWeight: 700, color: DECK.ink },
   reportText: {
-    fontSize: 9.5,
+    fontSize: 8.8,
     fontStyle: "italic",
     color: DECK.muted,
-    lineHeight: 1.35,
+    lineHeight: 1.3,
     marginTop: 5,
   },
 });
@@ -48,14 +48,14 @@ export function AnalyticsSlide() {
         size={25}
         subSize={15}
       />
-      <Kicker style={{ fontSize: 12 }}>{PITCH_ANALYTICS.kicker}</Kicker>
+      <Kicker style={{ fontSize: 11 }}>{PITCH_ANALYTICS.kicker}</Kicker>
       <View style={s.cols}>
         {PITCH_ANALYTICS.groups.map((g) => (
           <View key={g.title} style={s.col}>
             <View style={[s.groupHead, platePadding(11, 8)]}>
               <Text style={s.groupTitle}>{g.title}</Text>
             </View>
-            <Bullets items={g.items} size={10} gap={5} />
+            <Bullets items={g.items} size={9} gap={5} />
           </View>
         ))}
       </View>

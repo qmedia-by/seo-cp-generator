@@ -90,8 +90,12 @@ export const BRAND_ASSETS = {
   // PDF (белые растровые для зелёного фона)
   qMarkWhite: "public/brand/qmedia-q-white.png",
   wordmarkWhite: "public/brand/qmedia-wordmark-white.png",
-  // Шрифт с кириллицей
-  fontRegular: "public/fonts/QmediaSans-Regular.ttf",
-  fontBold: "public/fonts/QmediaSans-Bold.ttf",
+  // Шрифт PDF — Verdana (шрифт макетов и презентаций Qmedia);
+  // регистрируется в lib/pdf/theme.ts. Обычное начертание — без суффикса.
+  fontRegular: "public/fonts/Verdana.ttf",
+  fontBold: "public/fonts/Verdana-Bold.ttf",
+  // Шрифт веб-интерфейса — PT Sans под именем QmediaSans (@font-face в globals.css).
+  webFontRegular: "public/fonts/QmediaSans-Regular.ttf",
+  webFontBold: "public/fonts/QmediaSans-Bold.ttf",
 } as const;
 

@@ -13,7 +13,14 @@ import {
 } from "../../pitch";
 import { ICON, JOURNEY_FUNNEL } from "../assets";
 import { Bullets, Kicker, Overlay, Rich, Slide, SlideHead, rich } from "../primitives";
-import { clean, DECK, platePadding, R } from "../theme";
+import { alignCapTop, clean, DECK, platePadding, R } from "../theme";
+
+/** Кегль строки-вывода на слайде «по старинке» и её жёлтого «!». */
+const ANSWER_FS = 11;
+const BANG_FS = 16;
+
+/** Кегль жёлтой полосы-вывода: тем же числом кормится `platePadding`. */
+const YELLOW_STRIP_FS = 11.5;
 
 const s = StyleSheet.create({
   // Слайд «Здесь и сейчас»
@@ -23,7 +30,7 @@ const s = StyleSheet.create({
   iconText: { flex: 1, fontSize: 12.5, lineHeight: 1.35 },
 
   // Слайд «SEO на рост заявок»
-  lead: { fontSize: 12, marginBottom: 16, color: DECK.ink },
+  lead: { fontSize: 11.5, marginBottom: 15, color: DECK.ink },
   factRow: { flexDirection: "row", gap: 10 },
   fact: {
     flex: 1,
@@ -34,7 +41,7 @@ const s = StyleSheet.create({
     alignItems: "center",
   },
   factValue: {
-    fontSize: 29,
+    fontSize: 28,
     fontWeight: 700,
     color: DECK.black,
     lineHeight: 1,
@@ -51,9 +58,9 @@ const s = StyleSheet.create({
     backgroundColor: DECK.yellow,
     borderRadius: R.md,
     paddingHorizontal: 14,
-    marginTop: 24,
+    marginTop: 22,
   },
-  yellowStripText: { fontSize: 12.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  yellowStripText: { fontSize: YELLOW_STRIP_FS, fontWeight: 700, color: DECK.black, lineHeight: 1 },
 
   // Слайд «по старинке»
   leadBox: {
@@ -61,19 +68,29 @@ const s = StyleSheet.create({
     borderRadius: R.md,
     paddingVertical: 11,
     paddingHorizontal: 14,
-    marginTop: 12,
-    marginBottom: 20,
+    marginTop: 10,
+    marginBottom: 18,
   },
-  leadBoxText: { fontSize: 11.5, lineHeight: 1.4 },
+  leadBoxText: { fontSize: 11, lineHeight: 1.4 },
   cols: { flexDirection: "row", gap: 22 },
   col: { flex: 1 },
   // «!» вместо маркера списка: та же сетка, что у `Bullets`, и тот же кегль,
   // что у текста, — иначе строка таблицы съезжает (react-pdf игнорирует
   // alignItems, а разный кегль даёт разную высоту строчного бокса).
   answerRow: { flexDirection: "row", marginTop: 6 },
-  bangCell: { width: 7, marginRight: 8, alignItems: "center" },
-  bang: { fontSize: 12, fontWeight: 700, color: DECK.yellow },
-  answerText: { flex: 1, fontSize: 12, fontWeight: 700 },
+  bangCell: { width: 10, marginRight: 8, alignItems: "center" },
+  /**
+   * «!» крупнее текста (правка заказчика от 20.08.2026) — но тогда его верх
+   * прописных уезжает выше строки, поэтому подтягиваем `alignCapTop`.
+   */
+  bang: {
+    fontSize: BANG_FS,
+    fontWeight: 700,
+    color: DECK.yellow,
+    lineHeight: 1,
+    marginTop: alignCapTop(ANSWER_FS, BANG_FS),
+  },
+  answerText: { flex: 1, fontSize: ANSWER_FS, fontWeight: 700 },
 
   // Слайд «экосистема»
   cardRow: { flexDirection: "row", gap: 12 },
@@ -104,11 +121,11 @@ const s = StyleSheet.create({
 
   // Слайд «путь клиента»
   funnel: { position: "absolute", left: 164, top: 87, width: 503, height: 302 },
-  journeyCol: { width: 178, marginTop: 20 },
+  journeyCol: { width: 178, marginTop: 12 },
   journeyClosing: {
-    marginTop: 20,
+    marginTop: 14,
     width: 185,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: 700,
     lineHeight: 1.35,
   },
@@ -143,9 +160,9 @@ export function NowSlide() {
 export function ComplexSlide() {
   return (
     <Slide>
-      <SlideHead title={PITCH_COMPLEX.title} size={27} />
+      <SlideHead title={PITCH_COMPLEX.title} size={24} />
       <Text style={s.lead}>{clean(PITCH_COMPLEX.lead)}</Text>
-      <Kicker style={{ fontSize: 12, marginBottom: 10 }}>{PITCH_COMPLEX.kicker}</Kicker>
+      <Kicker style={{ fontSize: 11.5, marginBottom: 10 }}>{PITCH_COMPLEX.kicker}</Kicker>
       <View style={s.factRow}>
         {PITCH_COMPLEX.market.map((f) => (
           <View key={f.value} style={s.fact}>
@@ -154,7 +171,7 @@ export function ComplexSlide() {
           </View>
         ))}
       </View>
-      <View style={[s.yellowStrip, platePadding(11.5, 9)]}>
+      <View style={[s.yellowStrip, platePadding(YELLOW_STRIP_FS, 8)]}>
         <Text style={s.yellowStripText}>{clean(PITCH_COMPLEX.closing)}</Text>
       </View>
     </Slide>
@@ -170,13 +187,13 @@ export function OldSeoSlide() {
       <View style={s.leadBox}>
         <Text style={s.leadBoxText}>{clean(PITCH_OLD_SEO.lead)}</Text>
       </View>
-      <Kicker style={{ fontSize: 12, marginBottom: 12 }}>{PITCH_OLD_SEO.kicker}</Kicker>
+      <Kicker style={{ fontSize: 11, marginBottom: 9 }}>{PITCH_OLD_SEO.kicker}</Kicker>
       <View style={s.cols}>
         <View style={s.col}>
-          <Bullets items={PITCH_OLD_SEO.fails.slice(0, half)} size={12} gap={15} />
+          <Bullets items={PITCH_OLD_SEO.fails.slice(0, half)} size={11} gap={16} />
         </View>
         <View style={s.col}>
-          <Bullets items={PITCH_OLD_SEO.fails.slice(half)} size={12} gap={15} />
+          <Bullets items={PITCH_OLD_SEO.fails.slice(half)} size={11} gap={16} />
           <View style={s.answerRow}>
             <View style={s.bangCell}>
               <Text style={s.bang}>!</Text>
@@ -241,7 +258,7 @@ export function JourneySlide() {
       </Overlay>
       <View style={s.journeyCol}>
         <Kicker>{PITCH_JOURNEY.kicker}</Kicker>
-        <Bullets items={PITCH_JOURNEY.values} size={11} gap={13} />
+        <Bullets items={PITCH_JOURNEY.values} size={10} gap={10} />
       </View>
       <Rich text={PITCH_JOURNEY.closing} style={s.journeyClosing} />
     </Slide>

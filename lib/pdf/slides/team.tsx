@@ -24,11 +24,11 @@ import {
 import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
-  cols: { flexDirection: "row", gap: 20, marginTop: 6 },
+  cols: { flexDirection: "row", gap: 18, marginTop: 5 },
   col: { flex: 1 },
 
   // --- Профильная команда ---
-  role: { flexDirection: "row", marginBottom: 15 },
+  role: { flexDirection: "row", marginBottom: 13 },
   roleBody: { flex: 1, marginLeft: 10 },
   roleTitle: { fontSize: 11, fontWeight: 700, color: DECK.black, lineHeight: 1 },
   roleTitlePlate: {
@@ -38,17 +38,17 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 4,
   },
-  roleText: { fontSize: 9, lineHeight: 1.35, color: DECK.ink },
+  roleText: { fontSize: 8.6, lineHeight: 1.35, color: DECK.ink },
   // Скрепку убрали по правке заказчика — плашка идёт во всю ширину колонки.
-  teamNote: { marginTop: 6, paddingVertical: 11, paddingHorizontal: 13 },
-  teamNoteLine: { fontSize: 9.5, lineHeight: 1.5 },
+  teamNote: { marginTop: 6, paddingVertical: 10, paddingHorizontal: 12 },
+  teamNoteLine: { fontSize: 9, lineHeight: 1.45 },
 
   // --- Project-менеджер ---
-  pmLead: { fontSize: 11, lineHeight: 1.4, marginBottom: 16 },
+  pmLead: { fontSize: 10.5, lineHeight: 1.4, marginBottom: 14 },
   pmCard: {
     backgroundColor: DECK.card,
     borderRadius: R.lg,
-    padding: 14,
+    padding: 12,
     flexDirection: "row",
   },
   pmCardBody: { flex: 1, marginLeft: 14 },
@@ -60,7 +60,7 @@ const s = StyleSheet.create({
     marginBottom: 5,
   },
   pmNameText: { fontSize: 15, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  pmRole: { fontSize: 10.5, color: DECK.ink, marginBottom: 8 },
+  pmRole: { fontSize: 10, color: DECK.ink, marginBottom: 7 },
   pmResume: {
     fontSize: 10,
     color: DECK.grey,
@@ -75,11 +75,11 @@ const s = StyleSheet.create({
   pmNotePlate: {
     backgroundColor: DECK.yellow,
     borderRadius: R.md,
-    paddingHorizontal: 16,
-    marginTop: 16,
+    paddingHorizontal: 15,
+    marginTop: 15,
   },
   pmNote: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontStyle: "italic",
     fontWeight: 700,
     color: DECK.black,
@@ -221,12 +221,12 @@ export function ProjectManagerSlide({
         </View>
 
         <View style={s.col}>
-          <Kicker style={{ fontSize: 11.5, marginBottom: 8 }}>{PITCH_PM.doTitle}</Kicker>
-          <Bullets items={PITCH_PM.does} size={11} gap={9} />
+          <Kicker style={{ fontSize: 10.5, marginBottom: 6 }}>{PITCH_PM.doTitle}</Kicker>
+          <Bullets items={PITCH_PM.does} size={10} gap={9} />
         </View>
       </View>
 
-      <View style={[s.pmNotePlate, platePadding(11, 11)]}>
+      <View style={[s.pmNotePlate, platePadding(10.5, 10)]}>
         <Text style={s.pmNote}>{clean(PITCH_PM.note)}</Text>
       </View>
     </Slide>
