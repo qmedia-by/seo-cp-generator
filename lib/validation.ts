@@ -106,16 +106,35 @@ export const managerSchema = proposalManagerSchema.extend({
 
 export const managersSchema = z.array(managerSchema).max(50);
 
-/** Тело запроса на создание/импорт КП (id/createdAt/calc считаются на сервере). */
-export const createProposalSchema = z.object({
+/** Общая часть тела запроса на КП (id/createdAt/calc считаются на сервере). */
+const proposalBaseSchema = z.object({
   input: inputSchema,
   directions: z.array(directionSchema).min(1).max(5),
   meta: metaSchema.optional(),
+});
+
+/**
+ * Создание КП из визарда: оба человека **обязательны** — варианта «не указывать»
+ * в форме больше нет, и КП без менеджера с Project-менеджером не заводится.
+ */
+export const createProposalSchema = proposalBaseSchema.extend({
+  manager: proposalManagerSchema,
+  projectManager: proposalManagerSchema,
+});
+
+/**
+ * Импорт ранее сохранённого JSON: у старых КП менеджера (и тем более
+ * Project-менеджера) может не быть — такой файл всё равно должен импортироваться,
+ * иначе архив перестанет открываться. PDF/Excel в этом случае подставят
+ * контакты по умолчанию (COMPANY.manager).
+ */
+export const importProposalSchema = proposalBaseSchema.extend({
   manager: proposalManagerSchema.optional(),
   projectManager: proposalManagerSchema.optional(),
 });
 
-export type CreateProposalPayload = z.infer<typeof createProposalSchema>;
+/** Самый широкий вариант payload'а (импорт) — его и принимает `buildProposal`. */
+export type CreateProposalPayload = z.infer<typeof importProposalSchema>;
 
 // --- Настройки расчёта ---
 

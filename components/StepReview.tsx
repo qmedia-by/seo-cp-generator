@@ -39,6 +39,13 @@ export default function StepReview({
   const byKey = Object.fromEntries(calc.perDirection.map((d) => [d.key, d]));
   const months = calc.months.map((m) => m.month);
 
+  // Что мешает сохранить: сайт и оба человека обязательны.
+  const missing: string[] = [];
+  if (!input.siteName.trim()) missing.push("название сайта на первом шаге");
+  if (!manager.name.trim()) missing.push("менеджера на шаге «Менеджер»");
+  if (!projectManager.name.trim())
+    missing.push("Project-менеджера на шаге «Project-менеджер»");
+
   const params: [string, string][] = [
     ["Сайт", input.siteName || "—"],
     ["Регион", input.region],
@@ -260,22 +267,22 @@ export default function StepReview({
         <button
           type="button"
           onClick={onSave}
-          disabled={saving || !input.siteName.trim()}
+          disabled={saving || missing.length > 0}
           className="ui-btn-primary text-base px-6 py-3"
         >
           {saving ? "Сохранение…" : "Сохранить и сгенерировать КП"}
         </button>
       )}
-      {!savedId && !input.siteName.trim() && (
+      {!savedId && missing.length > 0 && (
         <p className="text-xs text-brand-gray -mt-3">
-          Укажите название сайта на первом шаге.
+          Укажите {missing.join(", ")}.
         </p>
       )}
     </div>
   );
 }
 
-/** Кто попал в КП на этой роли. Пусто — в PDF подставятся контакты по умолчанию. */
+/** Кто попал в КП на этой роли. Человек обязателен — пусто подсвечиваем ошибкой. */
 function PersonSummary({
   title,
   person,
@@ -300,8 +307,8 @@ function PersonSummary({
           </div>
         </div>
       ) : (
-        <div className="text-sm text-brand-gray">
-          Не указан — в КП попадут контакты по умолчанию.
+        <div className="text-sm text-red-600">
+          Не выбран — вернитесь на шаг «{title}».
         </div>
       )}
     </div>

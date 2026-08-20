@@ -120,7 +120,7 @@ export default function Wizard({
   const [directions, setDirections] = useState<DirectionSelection[]>(() =>
     initDirections(catalog),
   );
-  // По умолчанию — первый менеджер справочника (как раньше подставлялся COMPANY.manager).
+  // По умолчанию — первый менеджер справочника (пустой справочник → ручной ввод).
   const [managerId, setManagerId] = useState<string | null>(
     managers[0]?.id ?? null,
   );
@@ -128,10 +128,13 @@ export default function Wizard({
     managers[0] ? toProposalManager(managers[0]) : EMPTY_MANAGER,
   );
   // Project-менеджер выбирается независимо: КП часто готовит продавец, а ведёт
-  // проект другой человек. По умолчанию — «не указан».
-  const [pmId, setPmId] = useState<string | null>(null);
-  const [projectManager, setProjectManager] =
-    useState<ProposalManager>(EMPTY_MANAGER);
+  // проект другой человек. Но выбрать его тоже обязательно — «не указан» нет.
+  const [pmId, setPmId] = useState<string | null>(
+    managers[0]?.id ?? null,
+  );
+  const [projectManager, setProjectManager] = useState<ProposalManager>(() =>
+    managers[0] ? toProposalManager(managers[0]) : EMPTY_MANAGER,
+  );
   const [saving, setSaving] = useState(false);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -162,10 +165,10 @@ export default function Wizard({
     setDirections(next);
     setSavedId(null);
   };
-  /** Выбор из справочника; null — «не указывать» (в КП пойдут контакты по умолчанию). */
-  const selectManager = (m: Manager | null) => {
-    setManagerId(m?.id ?? null);
-    setManager(m ? toProposalManager(m) : EMPTY_MANAGER);
+  /** Выбор из справочника — обязателен (варианта «не указывать» нет). */
+  const selectManager = (m: Manager) => {
+    setManagerId(m.id);
+    setManager(toProposalManager(m));
     setSavedId(null);
   };
   // Ручная правка отвязывает от справочника: данные касаются только этого КП.
@@ -174,9 +177,9 @@ export default function Wizard({
     setManagerId(null);
     setSavedId(null);
   };
-  const selectProjectManager = (m: Manager | null) => {
-    setPmId(m?.id ?? null);
-    setProjectManager(m ? toProposalManager(m) : EMPTY_MANAGER);
+  const selectProjectManager = (m: Manager) => {
+    setPmId(m.id);
+    setProjectManager(toProposalManager(m));
     setSavedId(null);
   };
   const patchProjectManager = (patch: Partial<ProposalManager>) => {
@@ -184,6 +187,11 @@ export default function Wizard({
     setPmId(null);
     setSavedId(null);
   };
+
+  // Оба человека обязательны: без имени шаг не пройден и КП не сохраняется.
+  const stepBlocked =
+    (step === 2 && !manager.name.trim()) ||
+    (step === 3 && !projectManager.name.trim());
 
   const save = async () => {
     setSaving(true);
@@ -196,9 +204,9 @@ export default function Wizard({
           input,
           directions,
           meta,
-          // Менеджер без имени = не указан: PDF подставит контакты по умолчанию.
-          manager: manager.name.trim() ? manager : undefined,
-          projectManager: projectManager.name.trim() ? projectManager : undefined,
+          // Оба человека обязательны — форма не даёт сохранить без них.
+          manager,
+          projectManager,
         }),
       });
       if (!res.ok) {
@@ -295,6 +303,7 @@ export default function Wizard({
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.min(STEPS.length - 1, s + 1))}
+                disabled={stepBlocked}
                 className="ui-btn-primary"
               >
                 Далее

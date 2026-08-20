@@ -61,19 +61,32 @@ const s = StyleSheet.create({
   caseTitle: { fontSize: 10.5, fontWeight: 700, lineHeight: 1.35, marginBottom: 14, flexGrow: 1 },
 
   // --- Контакты ---
-  // Вертикаль блока выровнена по макету: контент и карта начинаются на одной
-  // высоте и вместе доходят почти до подвала.
-  contactRow: { flexDirection: "row", marginTop: 52 },
-  contactLeft: { flex: 1, paddingRight: 24 },
+  // Ряд поднят выше макета, потому что карта теперь почти квадратная (см.
+  // `map`) и растёт вверх и вниз. Левая колонка при этом **не растягивается**
+  // на её высоту: это три группы «заголовок + тело» (звонок · почта · офис),
+  // и внутри группы отступ намеренно мал, а сами группы стоят по центру
+  // вертикали (`justifyContent`) — колонка тянется до высоты ряда, то есть
+  // до высоты карты.
+  contactRow: { flexDirection: "row", marginTop: 26 },
+  contactLeft: { flex: 1, paddingRight: 24, justifyContent: "center" },
   plate: {
     alignSelf: "flex-start",
     backgroundColor: DECK.yellow,
     borderRadius: R.sm,
     paddingHorizontal: 5,
-    marginBottom: 18,
+    // Заголовок группы — прижат к своему телу.
+    marginBottom: 12,
   },
   plateText: { fontSize: 12, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  socialRow: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
+  // Отступы между группами (после тела) — заметно больше внутригруппового.
+  // Числа разные, потому что выравнивается **видимый** зазор между строками
+  // (≈30 pt): у почты строчный бокс 22 pt заметно выше своих литер, у ряда
+  // соцсетей — вровень с иконками. Замерено рендером в 150 dpi.
+  socialRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 25,
+  },
   socialIcon: { width: 26, height: 26, marginRight: 12, objectFit: "contain" },
   phone: { fontSize: 12.5, color: DECK.ink, textDecoration: "none", marginLeft: 8 },
   email: {
@@ -81,10 +94,15 @@ const s = StyleSheet.create({
     fontWeight: 700,
     color: DECK.ink,
     textDecoration: "none",
-    marginBottom: 28,
+    marginBottom: 42,
   },
   address: { fontSize: 11.5, lineHeight: 1.4 },
-  map: { width: 330, height: 196 },
+  // Карта почти квадратная (файл 1722×1378 ≈ 1.25), поэтому рамка задана под
+  // эту пропорцию: `Framed` кроет картинку по `objectFit: "cover"`, и на
+  // прежней широкой рамке (330×196) у карты срезало верх и низ. Ширину
+  // держит соседний столбец: строка соцсетей с телефоном доходит до 350 pt,
+  // левее 356 карту двигать нельзя.
+  map: { width: 330, height: 265 },
 });
 
 /** Макет 33 — цифры о компании, награды, клиенты и разделы сайта. */

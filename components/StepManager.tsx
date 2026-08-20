@@ -13,7 +13,7 @@ interface Props {
   manager: ProposalManager;
   /** id выбранного из справочника; null — данные введены/изменены вручную. */
   managerId: string | null;
-  onSelect: (m: Manager | null) => void;
+  onSelect: (m: Manager) => void;
   onPatch: (patch: Partial<ProposalManager>) => void;
 }
 
@@ -31,6 +31,7 @@ export default function StepManager({
   onSelect,
   onPatch,
 }: Props) {
+  // Выбор человека обязателен: КП без менеджера не сохраняется.
   const empty = !manager.name.trim();
 
   return (
@@ -47,7 +48,7 @@ export default function StepManager({
         {managers.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-brand-gray">
             Справочник пуст — заполните его в разделе «Настройки → Список
-            менеджеров» или введите данные вручную ниже.
+            менеджеров».
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -83,21 +84,13 @@ export default function StepManager({
                 </button>
               );
             })}
-            <button
-              type="button"
-              onClick={() => onSelect(null)}
-              className={`text-left rounded-xl border border-dashed px-4 py-3 transition ${
-                empty
-                  ? "border-brand-green bg-brand-greenSoft ring-2 ring-brand-green/30"
-                  : "border-gray-300 bg-white hover:border-brand-green"
-              }`}
-            >
-              <div className="font-semibold">Не указывать</div>
-              <div className="text-xs text-brand-gray mt-1">
-                В КП попадут контакты по умолчанию из lib/company.ts
-              </div>
-            </button>
           </div>
+        )}
+        {empty && (
+          <p className="mt-3 text-sm text-red-600">
+            Выберите человека из справочника или заполните данные вручную — без
+            этого КП не сохранится.
+          </p>
         )}
       </div>
 
