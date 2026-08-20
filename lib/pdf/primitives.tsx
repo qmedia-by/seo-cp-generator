@@ -10,6 +10,7 @@ import {
   LinearGradient,
   Link,
   Page,
+  Path,
   Rect,
   Stop,
   StyleSheet,
@@ -18,7 +19,7 @@ import {
   View,
 } from "@react-pdf/renderer";
 import { COMPANY } from "../company";
-import { LOGO, ICON } from "./assets";
+import { LOGO, ICON, Q_MARK } from "./assets";
 import {
   centerTextTop,
   clean,
@@ -26,15 +27,19 @@ import {
   type Sx,
   FONT,
   FOOTER_H,
+  GREEN_WATERMARK_OPACITY,
   PAD_BOTTOM,
   PAD_TOP,
   PAD_X,
   PAGE_H,
   PAGE_SIZE,
   PAGE_W,
+  PLATE_INSET_RATIO,
+  PLATE_SPACE_RATIO,
   R,
   WORDMARK_RATIO,
   platePadding,
+  plateText,
 } from "./theme";
 
 const s = StyleSheet.create({
@@ -65,22 +70,24 @@ const s = StyleSheet.create({
     height: 28,
     width: 28 * WORDMARK_RATIO,
   },
+  // Кегль контактов в макете 8/9 pt; подняли до 9.5 и осветлили цвет —
+  // на зелёном фоне прежний `note` заказчик назвал «слишком тусклым».
   footerPhone: {
     position: "absolute",
-    top: centerTextTop(FOOTER_H, 8),
+    top: centerTextTop(FOOTER_H, 9.5),
     left: 133.5,
-    fontSize: 8,
+    fontSize: 9.5,
     lineHeight: 1,
-    color: DECK.note,
+    color: DECK.footerText,
     textDecoration: "none",
   },
   footerMail: {
     position: "absolute",
-    top: centerTextTop(FOOTER_H, 9),
-    left: 238.4,
-    fontSize: 9,
+    top: centerTextTop(FOOTER_H, 9.5),
+    left: 245,
+    fontSize: 9.5,
     lineHeight: 1,
-    color: DECK.note,
+    color: DECK.footerText,
     textDecoration: "none",
   },
 
@@ -95,13 +102,9 @@ const s = StyleSheet.create({
   },
 
   // --- Заголовок слайда ---
-  h1: {
-    fontSize: 27,
-    fontWeight: 700,
-    color: DECK.black,
-    lineHeight: 1.1,
-    marginBottom: 4,
-  },
+  // Только цвет и начертание: вертикальную геометрию строки задаёт `plateText`
+  // (см. `HlLine`), чтобы жёлтая плашка сидела симметрично вокруг букв.
+  h1: { fontWeight: 700, color: DECK.black },
   subLine: {
     alignSelf: "flex-start",
     backgroundColor: DECK.yellow,
@@ -134,10 +137,9 @@ const s = StyleSheet.create({
   },
 
   // --- Аватар ---
-  avatar: {
+  avatarRing: { backgroundColor: DECK.yellow, alignItems: "center", justifyContent: "center" },
+  avatarInner: {
     overflow: "hidden",
-    borderWidth: 2,
-    borderColor: DECK.yellow,
     backgroundColor: DECK.fact,
     alignItems: "center",
     justifyContent: "center",
@@ -180,13 +182,13 @@ const s = StyleSheet.create({
     lineHeight: 1,
     textAlign: "center",
   },
+  greenSubWrap: { marginTop: 18, alignItems: "center" },
   greenSub: {
     fontSize: 21,
     fontWeight: 700,
     color: DECK.white,
     textAlign: "center",
-    lineHeight: 1.25,
-    marginTop: 16,
+    lineHeight: 1.3,
   },
 });
 
@@ -232,17 +234,42 @@ export function FooterBand() {
 // ── Водяные знаки ────────────────────────────────────────────────────────────
 
 /**
+ * Знак «Q» вектором — водяные знаки листов.
+ *
+ * Раньше это была картинка; на 559 pt отрисовки её 511 px давали ~66 dpi, и
+ * заказчик справедливо назвал фон размытым. Вектор режется по любому размеру,
+ * весит ноль и позволяет задать цвет с прозрачностью прямо здесь.
+ */
+export function QMark({
+  color,
+  opacity,
+  style,
+}: {
+  color: string;
+  opacity: number;
+  style: Sx;
+}) {
+  return (
+    <Svg viewBox={Q_MARK.viewBox} style={style}>
+      <Path d={Q_MARK.ring} fill={color} fillOpacity={opacity} />
+      <Path d={Q_MARK.dot} fill={color} fillOpacity={opacity} />
+    </Svg>
+  );
+}
+
+/**
  * Кольцо «Q» на белом листе.
  *
- * 🛑 Абсолютная `<Image>` с отрицательным смещением ПРЯМО в `<Page>` вешает
- * раскладку react-pdf (синхронный бесконечный цикл). Поэтому картинка всегда
+ * 🛑 Абсолютный элемент с отрицательным смещением ПРЯМО в `<Page>` вешает
+ * раскладку react-pdf (синхронный бесконечный цикл). Поэтому знак всегда
  * внутри контейнера с `overflow: "hidden"`.
  */
 export function Watermark() {
   return (
     <View style={s.bleed} fixed>
-      <Image
-        src={LOGO.qGrey}
+      <QMark
+        color={DECK.watermark}
+        opacity={1}
         style={{ position: "absolute", top: -77, left: 317, width: 559, height: 559 }}
       />
     </View>
@@ -288,31 +315,23 @@ export function GreenBg() {
   );
 }
 
-/** Два белых кольца на зелёном листе-разделителе (макеты 19 / 27 / 32). */
+/**
+ * Два белых кольца на зелёном листе-разделителе (макеты 19 / 27 / 32).
+ * Прозрачность подняли с 0.12 до 0.2 — по правке заказчика («тусклые фоновые
+ * логотипы»); в макете знаки на зелёном читаются заметнее.
+ */
 function GreenWatermark() {
   return (
     <View style={s.bleed}>
-      <Image
-        src={LOGO.qWhite}
-        style={{
-          position: "absolute",
-          top: -75,
-          left: 436,
-          width: 364,
-          height: 364,
-          opacity: 0.12,
-        }}
+      <QMark
+        color={DECK.white}
+        opacity={GREEN_WATERMARK_OPACITY}
+        style={{ position: "absolute", top: -75, left: 436, width: 364, height: 364 }}
       />
-      <Image
-        src={LOGO.qWhite}
-        style={{
-          position: "absolute",
-          top: 30,
-          left: -120,
-          width: 511,
-          height: 511,
-          opacity: 0.12,
-        }}
+      <QMark
+        color={DECK.white}
+        opacity={GREEN_WATERMARK_OPACITY}
+        style={{ position: "absolute", top: 30, left: -120, width: 511, height: 511 }}
       />
     </View>
   );
@@ -338,15 +357,22 @@ export function Slide({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Зелёный лист-разделитель: крупный заголовок на жёлтой плашке + подпись. */
+/**
+ * Зелёный лист-разделитель: крупный заголовок на жёлтой плашке + подпись.
+ *
+ * Подпись принимает массив строк — в макетах она разбита на строки вручную
+ * («Познакомьтесь с вашей командой / интернет-маркетинга»), и полагаться на
+ * автоперенос нельзя: он оставлял на второй строке одно слово.
+ */
 export function GreenSlide({
   title,
   subtitle,
 }: {
-  title: string | string[];
-  subtitle: string;
+  title: string | readonly string[];
+  subtitle: string | readonly string[];
 }) {
-  const lines = Array.isArray(title) ? title : [title];
+  const lines = Array.isArray(title) ? title : [title as string];
+  const subLines = Array.isArray(subtitle) ? subtitle : [subtitle as string];
   return (
     <Page size={PAGE_SIZE} style={s.greenPage}>
       <GreenBg />
@@ -357,7 +383,13 @@ export function GreenSlide({
             <Text style={s.greenTitle}>{line}</Text>
           </View>
         ))}
-        <Text style={s.greenSub}>{clean(subtitle)}</Text>
+        <View style={s.greenSubWrap}>
+          {subLines.map((line, i) => (
+            <Text key={i} style={s.greenSub}>
+              {clean(line)}
+            </Text>
+          ))}
+        </View>
       </View>
       <FooterBand />
     </Page>
@@ -366,35 +398,28 @@ export function GreenSlide({
 
 // ── Текстовые примитивы ──────────────────────────────────────────────────────
 
-/** Инлайновый жёлтый хайлайт — как `<a:highlight>` в макете. */
-export function Hl({ children }: { children: React.ReactNode }) {
-  return <Text style={{ backgroundColor: DECK.yellow }}>{children}</Text>;
-}
-
 const RICH_RE = /(\*\*[^*]+\*\*|==[^=]+==)/g;
+const HL_RE = /(==[^=]+==)/g;
 
-/**
- * Разметка текстов слайдов: `**жирный**` и `==жёлтый хайлайт==`.
- *
- * Нужна, потому что в макетах акценты стоят посреди фразы («Команду из 3–5
- * человек **по цене 1 специалиста в штате**»), а собирать такие строки из
- * массивов кусков в `lib/pitch.ts` нечитаемо. Хайлайт делается вложенным
- * `<Text>` с `backgroundColor` — react-pdf красит его построчно, ровно как
- * `<a:highlight>` в презентации.
- */
-export function rich(text: string): React.ReactNode[] {
-  return clean(text)
+const isBold = (part: string) => part.startsWith("**") && part.endsWith("**");
+const isHl = (part: string) => part.startsWith("==") && part.endsWith("==");
+
+/** Разбор разметки в **уже подготовленной** (`clean`) строке. */
+function markup(text: string): React.ReactNode[] {
+  return text
     .split(RICH_RE)
     .filter((part) => part !== "")
     .map((part, i) => {
-      if (part.startsWith("**") && part.endsWith("**")) {
+      if (isBold(part)) {
         return (
           <Text key={i} style={{ fontWeight: 700 }}>
             {part.slice(2, -2)}
           </Text>
         );
       }
-      if (part.startsWith("==") && part.endsWith("==")) {
+      if (isHl(part)) {
+        // Внутри абзаца, который может перенестись, плашкой хайлайт не сделать —
+        // остаётся inline-вариант. Для отдельных строк есть `HlLine` (ниже).
         return (
           <Text key={i} style={{ backgroundColor: DECK.yellow }}>
             {part.slice(2, -2)}
@@ -407,9 +432,98 @@ export function rich(text: string): React.ReactNode[] {
     });
 }
 
+/**
+ * Разметка текстов слайдов: `**жирный**` и `==жёлтый хайлайт==`.
+ *
+ * Нужна, потому что в макетах акценты стоят посреди фразы («Команду из 3–5
+ * человек **по цене 1 специалиста в штате**»), а собирать такие строки из
+ * массивов кусков в `lib/pitch.ts` нечитаемо.
+ */
+export function rich(text: string): React.ReactNode[] {
+  return markup(clean(text));
+}
+
 /** `rich()` в виде компонента — когда стиль задаётся снаружи. */
 export function Rich({ text, style }: { text: string; style?: Sx }) {
   return <Text style={style ?? {}}>{rich(text)}</Text>;
+}
+
+/**
+ * Строка, в которой кусок фразы подсвечен жёлтым (`==…==`).
+ *
+ * 🛑 Хайлайт — **настоящая плашка** (`View` с фоном), а не `backgroundColor`
+ * на inline-`<Text>`. У inline-варианта высоту подложки задаёт строчная
+ * коробка шрифта: глиф сидит в её нижней части, поэтому жёлтое выпирает над
+ * прописными и почти касается базовой линии снизу — сколько ни подбирай
+ * `lineHeight`, симметрии не выходит. Здесь геометрия задана числом
+ * (`plateText` в theme.ts), и от метрик шрифта она не зависит.
+ *
+ * Строка собирается флекс-рядом из кусков. У всех кусков — плашек и обычного
+ * текста — одинаковая внутренняя геометрия, поэтому базовые линии совпадают;
+ * `alignItems: "flex-end"` держит плашку на последней строке, если обычный
+ * кусок всё-таки перенёсся.
+ */
+export function HlLine({
+  text,
+  size,
+  textStyle,
+  style,
+}: {
+  /** Строка с разметкой `**жирный**` и `==жёлтый==`. */
+  text: string;
+  size: number;
+  /** Цвет и начертание текста; вертикальную геометрию задаёт `plateText`. */
+  textStyle?: Sx;
+  /** Стиль строки-контейнера (отступы). */
+  style?: Sx;
+}) {
+  const geom = plateText(size);
+  const space = PLATE_SPACE_RATIO * size;
+  // Пробел на стыке с плашкой рисуем отступом, а не пробелом в тексте:
+  // react-pdf срезает пробел в конце `<Text>`, и слово прилипало бы к плашке.
+  let gapBefore = false;
+
+  const items = clean(text)
+    .split(HL_RE)
+    .flatMap((part) => {
+      if (part === "") return [];
+      const hl = isHl(part);
+      const body = hl ? part.slice(2, -2) : part;
+      const lead = /^\s/.test(body);
+      const trimmed = body.trim();
+      if (trimmed === "") {
+        gapBefore = true;
+        return [];
+      }
+      const item = { hl, text: trimmed, gap: gapBefore || lead };
+      gapBefore = /\s$/.test(body);
+      return [item];
+    });
+
+  return (
+    <View style={[{ flexDirection: "row", alignItems: "flex-end" }, style ?? {}]}>
+      {items.map((item, i) => (
+        <View
+          key={i}
+          style={[
+            item.hl
+              ? {
+                  flexShrink: 0,
+                  backgroundColor: DECK.yellow,
+                  borderRadius: R.sm,
+                  paddingHorizontal: PLATE_INSET_RATIO * size,
+                }
+              : { flexShrink: 1 },
+            i > 0 && item.gap ? { marginLeft: space } : {},
+          ]}
+        >
+          <Text style={[textStyle ?? {}, { fontSize: size }, geom]}>
+            {markup(item.text)}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
 }
 
 /**
@@ -434,17 +548,22 @@ export function SlideHead({
   style?: Sx;
 }) {
   const lines = Array.isArray(title) ? title : [title as string];
+  // Междустрочие: высоту строки задаёт геометрия плашки (`plateText`), а воздух
+  // между строками добавляем отступом — так расстояние между базовыми линиями
+  // одинаково и у строк с жёлтым выделением, и без него.
+  const lineGap = size * 0.19;
   return (
     <View style={style ?? {}}>
-      {/* Каждая строка — отдельный <Text>: перевод строки внутри одного узла
+      {/* Каждая строка — отдельный узел: перевод строки внутри одного `<Text>`
           react-pdf считает новым абзацем и подмешивает в лист Helvetica. */}
       {lines.map((line, i) => (
-        <Text
+        <HlLine
           key={i}
-          style={[s.h1, { fontSize: size }, i < lines.length - 1 ? { marginBottom: 0 } : {}]}
-        >
-          {rich(line)}
-        </Text>
+          text={line}
+          size={size}
+          textStyle={s.h1}
+          style={{ marginBottom: i < lines.length - 1 ? lineGap : 4 }}
+        />
       ))}
       {!!subtitle && (
         <View
@@ -523,15 +642,25 @@ export function NoteBox({
 /**
  * Круглое фото в жёлтой рамке. Байты приходят из таблицы `manager_photos`
  * (см. `lib/pdf/photos.ts`); нет фото — кружок с инициалами, как в вебе.
+ *
+ * 🛑 Рамку нельзя делать бордером на том же блоке, что и картинку: `overflow`
+ * режет содержимое по ОКРУЖНОСТИ БОРДЕР-БОКСА, а квадратная картинка внутри
+ * достаёт до неё по диагоналям — от жёлтого кольца остаются четыре серпика по
+ * сторонам света («рамка не по кругу», правка заказчика). Поэтому кольцо и
+ * картинка — два вложенных круга: внешний жёлтый и внутренний, меньше на
+ * толщину кольца, уже со своим `overflow: hidden`.
  */
 export function Avatar({
   src,
   name,
   size,
+  ring = 2,
 }: {
   src?: { data: Buffer; format: "png" | "jpg" } | string | null;
   name: string;
   size: number;
+  /** Толщина жёлтого кольца. */
+  ring?: number;
 }) {
   const initials = name
     .trim()
@@ -539,22 +668,30 @@ export function Avatar({
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
+  const inner = size - 2 * ring;
 
   return (
-    <View style={[s.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
-      {src ? (
-        <Image src={src} style={s.avatarImg} />
-      ) : (
-        <Text style={[s.avatarInitials, { fontSize: size * 0.34 }]}>
-          {initials || "?"}
-        </Text>
-      )}
+    <View style={[s.avatarRing, { width: size, height: size, borderRadius: size / 2 }]}>
+      <View
+        style={[s.avatarInner, { width: inner, height: inner, borderRadius: inner / 2 }]}
+      >
+        {src ? (
+          <Image src={src} style={s.avatarImg} />
+        ) : (
+          <Text style={[s.avatarInitials, { fontSize: size * 0.34 }]}>
+            {initials || "?"}
+          </Text>
+        )}
+      </View>
     </View>
   );
 }
 
 /**
  * Картинка в жёлтой рамке — награды, сканы отзывов, обложки кейсов, карта.
+ *
+ * Углы прямые: скругления добавлялись по правке заказчика к плашкам и
+ * карточкам, но фоторамки он попросил вернуть к макету — там они острые.
  *
  * 🛑 Рамку нельзя вешать прямо на `<Image>`: при `objectFit: "cover"` картинка
  * рисуется поверх бордера, и от рамки остаётся полоска в пару пикселей у края
@@ -564,7 +701,7 @@ export function Avatar({
 export function Framed({
   src,
   style,
-  radius = R.md,
+  radius = 0,
 }: {
   src: string;
   /** Размеры рамки: ширина/высота/flex — как у обычного блока. */

@@ -16,7 +16,7 @@ import {
 } from "../../format";
 import type { PitchDirection } from "../../pitch";
 import type { DirectionScheduleCalc, DirectionSelection } from "../../types";
-import { Bullets, Kicker, NoteBox, Slide, SlideHead, rich } from "../primitives";
+import { Bullets, HlLine, Kicker, NoteBox, Slide, SlideHead } from "../primitives";
 import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
@@ -43,18 +43,19 @@ const s = StyleSheet.create({
     marginTop: 6,
   },
 
-  cols: { flexDirection: "row", gap: 18, marginTop: 4 },
+  cols: { flexDirection: "row", gap: 18, marginTop: 8 },
   col: { flex: 1 },
-  defsCol: { width: 128 },
-  resultTitle: { fontSize: 10, fontWeight: 700, color: DECK.ink, lineHeight: 1.3, marginBottom: 6 },
+  defsCol: { width: 138 },
+  /** Только цвет и начертание: вертикаль задаёт `plateText` внутри `HlLine`. */
+  resultTitle: { fontWeight: 700, color: DECK.ink },
   def: {
     borderWidth: 1.5,
     borderColor: DECK.yellow,
     borderRadius: R.md,
-    padding: 8,
-    marginBottom: 10,
+    padding: 9,
+    marginBottom: 12,
   },
-  defText: { fontSize: 9, lineHeight: 1.3 },
+  defText: { fontSize: 9.5, lineHeight: 1.35 },
 
   // --- Лист состава работ ---
   banner: {
@@ -95,11 +96,14 @@ const s = StyleSheet.create({
   dotOn: { backgroundColor: DECK.green },
 
   workGrid: { flexDirection: "row", flexWrap: "wrap" },
-  workCell: { paddingRight: 6, paddingBottom: 4 },
+  workCell: { paddingRight: 6 },
   workCard: { backgroundColor: DECK.card, borderRadius: R.md, padding: 5 },
   workHead: { fontSize: 7.8, fontWeight: 700, color: DECK.ink, lineHeight: 1.2 },
   workDesc: { fontSize: 6.6, color: DECK.grey, lineHeight: 1.2, marginTop: 2 },
 });
+
+/** Кегль шапки правой колонки («Результат для бизнеса …помогает…»). */
+const RESULT_TITLE_FS = 11.5;
 
 /** Плашка со сроком направления — связывает описание со сметой. */
 function DirectionBadge({ calc }: { calc?: DirectionScheduleCalc }) {
@@ -124,6 +128,13 @@ export function DirectionAboutSlide({
   pitch: PitchDirection;
   calc?: DirectionScheduleCalc;
 }) {
+  // У GEO/AEO третья колонка с расшифровкой терминов забирает ~140 pt ширины:
+  // строки в двух оставшихся колонках ломаются чаще, и при общем кегле лист
+  // перестаёт помещаться в 405 pt. Поэтому такой слайд идёт плотнее.
+  const dense = !!pitch.defs;
+  const bulletSize = dense ? 10 : 11;
+  const bulletGap = dense ? 8 : 12;
+
   return (
     <Slide>
       <View style={s.headRow}>
@@ -140,22 +151,27 @@ export function DirectionAboutSlide({
 
       <View style={s.cols}>
         <View style={s.col}>
-          <Kicker style={{ fontSize: 10 }}>{pitch.doTitle}</Kicker>
-          <Bullets items={pitch.does} size={9.5} gap={5} />
+          <Kicker style={{ fontSize: 11.5, marginBottom: 8 }}>{pitch.doTitle}</Kicker>
+          <Bullets items={pitch.does} size={bulletSize} gap={bulletGap} />
         </View>
 
         <View style={s.col}>
           {pitch.resultTitle.map((line, i) => (
-            <Text
+            <HlLine
               key={i}
-              style={[s.resultTitle, i < pitch.resultTitle.length - 1 ? { marginBottom: 0 } : {}]}
-            >
-              {rich(line)}
-            </Text>
+              text={line}
+              size={RESULT_TITLE_FS}
+              textStyle={s.resultTitle}
+              style={{
+                marginBottom: i < pitch.resultTitle.length - 1 ? 2 : 8,
+              }}
+            />
           ))}
-          <Bullets items={pitch.results} size={9.5} gap={5} />
-          <View style={{ height: 8 }} />
-          <NoteBox size={9}>{pitch.note}</NoteBox>
+          <Bullets items={pitch.results} size={bulletSize} gap={bulletGap} />
+          <View style={{ height: dense ? 10 : 14 }} />
+          <NoteBox size={dense ? 9.5 : 10.5} style={{ paddingVertical: 11, paddingHorizontal: 12 }}>
+            {pitch.note}
+          </NoteBox>
         </View>
 
         {/* У GEO/AEO в макете есть отдельная колонка с расшифровкой терминов. */}
@@ -210,7 +226,13 @@ export function DirectionWorksSlide({
   );
   // Полный каталог направления — 11 работ; в два столбца шесть рядов карточек
   // в 405 pt не помещаются, поэтому длинные списки раскладываем в три колонки.
-  const colWidth = direction.works.length > 6 ? "33.33%" : "50%";
+  const cols = direction.works.length > 6 ? 3 : 2;
+  const colWidth = cols === 3 ? "33.33%" : "50%";
+  // Коротким спискам достаётся свободная нижняя треть листа — раздаём её
+  // отступом между рядами. Растёт только отступ, а не кегль: высота карточки
+  // зависит от длины работы (её правят в настройках), и подгонять под неё
+  // размеры значило бы гадать. Четыре ряда — потолок листа, там воздуха нет.
+  const rowGap = [22, 22, 12, 4][Math.min(Math.ceil(direction.works.length / cols), 4) - 1];
 
   return (
     <Slide>
@@ -269,7 +291,11 @@ export function DirectionWorksSlide({
         {direction.works.map((w, i) => {
           const { head, rest } = splitWork(w.text);
           return (
-            <View key={i} style={[s.workCell, { width: colWidth }]} wrap={false}>
+            <View
+              key={i}
+              style={[s.workCell, { width: colWidth, paddingBottom: rowGap }]}
+              wrap={false}
+            >
               <View style={s.workCard}>
                 <Text style={s.workHead}>{clean(head)}</Text>
                 {rest !== "" && <Text style={s.workDesc}>{clean(rest)}</Text>}

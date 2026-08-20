@@ -17,61 +17,67 @@ import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
   // Слайд «Здесь и сейчас»
-  iconGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 6 },
-  iconCell: { width: "50%", flexDirection: "row", paddingRight: 18, paddingBottom: 14 },
-  icon: { width: 42, height: 42, marginRight: 14 },
-  iconText: { flex: 1, fontSize: 11.5, lineHeight: 1.3 },
+  iconGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 14 },
+  iconCell: { width: "50%", flexDirection: "row", paddingRight: 24, paddingBottom: 18 },
+  icon: { width: 46, height: 46, marginRight: 16 },
+  iconText: { flex: 1, fontSize: 12.5, lineHeight: 1.35 },
 
   // Слайд «SEO на рост заявок»
-  lead: { fontSize: 11.5, marginBottom: 11, color: DECK.ink },
-  factRow: { flexDirection: "row", gap: 6 },
+  lead: { fontSize: 12, marginBottom: 16, color: DECK.ink },
+  factRow: { flexDirection: "row", gap: 10 },
   fact: {
     flex: 1,
     backgroundColor: DECK.fact,
     borderRadius: R.md,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
     alignItems: "center",
   },
   factValue: {
-    fontSize: 24,
+    fontSize: 29,
     fontWeight: 700,
     color: DECK.black,
     lineHeight: 1,
-    marginBottom: 10,
+    marginBottom: 13,
   },
   factText: {
-    fontSize: 9.5,
+    fontSize: 10.5,
     fontStyle: "italic",
     color: DECK.caption,
     textAlign: "center",
-    lineHeight: 1.3,
+    lineHeight: 1.35,
   },
   yellowStrip: {
     backgroundColor: DECK.yellow,
     borderRadius: R.md,
-    paddingHorizontal: 12,
-    marginTop: 16,
+    paddingHorizontal: 14,
+    marginTop: 24,
   },
-  yellowStripText: { fontSize: 11.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  yellowStripText: { fontSize: 12.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
 
   // Слайд «по старинке»
   leadBox: {
     backgroundColor: DECK.note,
     borderRadius: R.md,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
-    marginBottom: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginTop: 12,
+    marginBottom: 20,
   },
-  leadBoxText: { fontSize: 11, lineHeight: 1.35 },
+  leadBoxText: { fontSize: 11.5, lineHeight: 1.4 },
   cols: { flexDirection: "row", gap: 22 },
   col: { flex: 1 },
-  answerRow: { flexDirection: "row", alignItems: "center", marginTop: 8 },
-  bang: { fontSize: 20, fontWeight: 700, color: DECK.yellow, marginRight: 10, lineHeight: 1 },
-  answerText: { fontSize: 11.5, fontWeight: 700 },
+  // «!» вместо маркера списка: та же сетка, что у `Bullets`, и тот же кегль,
+  // что у текста, — иначе строка таблицы съезжает (react-pdf игнорирует
+  // alignItems, а разный кегль даёт разную высоту строчного бокса).
+  answerRow: { flexDirection: "row", marginTop: 6 },
+  bangCell: { width: 7, marginRight: 8, alignItems: "center" },
+  bang: { fontSize: 12, fontWeight: 700, color: DECK.yellow },
+  answerText: { flex: 1, fontSize: 12, fontWeight: 700 },
 
   // Слайд «экосистема»
-  cardRow: { flexDirection: "row", gap: 12, marginBottom: 10 },
+  cardRow: { flexDirection: "row", gap: 12 },
+  cardRowGap: { marginBottom: 14 },
   card: {
     flex: 1,
     borderRadius: R.md,
@@ -79,26 +85,32 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: DECK.cardLine,
   },
-  cardHead: { backgroundColor: DECK.cardLine, paddingHorizontal: 10 },
-  cardHeadText: { fontSize: 11.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  cardHead: { backgroundColor: DECK.cardLine, paddingHorizontal: 11 },
+  cardHeadText: { fontWeight: 700, color: DECK.black, lineHeight: 1 },
   cardBody: {
     backgroundColor: DECK.card,
-    paddingVertical: 9,
-    paddingHorizontal: 9,
+    paddingVertical: 12,
+    paddingHorizontal: 11,
     flexGrow: 1,
+    justifyContent: "center",
   },
-  cardText: { fontSize: 9.5, textAlign: "center", lineHeight: 1.35 },
-  cardSpacer: { flex: 1 },
+  cardText: { fontSize: 10.5, textAlign: "center", lineHeight: 1.4 },
+  /**
+   * Распорки нижнего ряда. Фиксированные, а не `flex: 1`: две карточки должны
+   * быть заметно шире трёх верхних (так в макете) — иначе в шапку не влезает
+   * «5. Техническая SEO-поддержка» и она рвётся на две строки.
+   */
+  cardSpacer: { width: 55 },
 
   // Слайд «путь клиента»
   funnel: { position: "absolute", left: 164, top: 87, width: 503, height: 302 },
-  journeyCol: { width: 176, marginTop: 14 },
+  journeyCol: { width: 178, marginTop: 20 },
   journeyClosing: {
-    marginTop: 12,
-    width: 200,
-    fontSize: 10.5,
+    marginTop: 20,
+    width: 185,
+    fontSize: 11,
     fontWeight: 700,
-    lineHeight: 1.3,
+    lineHeight: 1.35,
   },
 });
 
@@ -112,7 +124,7 @@ export function NowSlide() {
         size={44}
         subSize={19}
       />
-      <Kicker style={{ fontSize: 15, marginTop: 6, marginBottom: 4 }}>
+      <Kicker style={{ fontSize: 15, marginTop: 10, marginBottom: 0 }}>
         {PITCH_NOW.kicker}
       </Kicker>
       <View style={s.iconGrid}>
@@ -131,9 +143,9 @@ export function NowSlide() {
 export function ComplexSlide() {
   return (
     <Slide>
-      <SlideHead title={PITCH_COMPLEX.title} size={24} />
+      <SlideHead title={PITCH_COMPLEX.title} size={27} />
       <Text style={s.lead}>{clean(PITCH_COMPLEX.lead)}</Text>
-      <Kicker>{PITCH_COMPLEX.kicker}</Kicker>
+      <Kicker style={{ fontSize: 12, marginBottom: 10 }}>{PITCH_COMPLEX.kicker}</Kicker>
       <View style={s.factRow}>
         {PITCH_COMPLEX.market.map((f) => (
           <View key={f.value} style={s.fact}>
@@ -154,19 +166,21 @@ export function OldSeoSlide() {
   const half = 4;
   return (
     <Slide>
-      <SlideHead title={PITCH_OLD_SEO.title} size={25} />
+      <SlideHead title={PITCH_OLD_SEO.title} size={28} />
       <View style={s.leadBox}>
         <Text style={s.leadBoxText}>{clean(PITCH_OLD_SEO.lead)}</Text>
       </View>
-      <Kicker>{PITCH_OLD_SEO.kicker}</Kicker>
+      <Kicker style={{ fontSize: 12, marginBottom: 12 }}>{PITCH_OLD_SEO.kicker}</Kicker>
       <View style={s.cols}>
         <View style={s.col}>
-          <Bullets items={PITCH_OLD_SEO.fails.slice(0, half)} gap={8} />
+          <Bullets items={PITCH_OLD_SEO.fails.slice(0, half)} size={12} gap={15} />
         </View>
         <View style={s.col}>
-          <Bullets items={PITCH_OLD_SEO.fails.slice(half)} gap={8} />
+          <Bullets items={PITCH_OLD_SEO.fails.slice(half)} size={12} gap={15} />
           <View style={s.answerRow}>
-            <Text style={s.bang}>!</Text>
+            <View style={s.bangCell}>
+              <Text style={s.bang}>!</Text>
+            </View>
             <Text style={s.answerText}>{PITCH_OLD_SEO.answer}</Text>
           </View>
         </View>
@@ -175,13 +189,16 @@ export function OldSeoSlide() {
   );
 }
 
+/** Кегль шапок карточек «экосистемы» — подобран так, чтобы ни одна не рвалась. */
+const CARD_HEAD_FS = 12;
+
 /** Макет 12 — экосистема из пяти типов SEO. */
 export function EcosystemSlide() {
   const items = PITCH_ECOSYSTEM.items;
   const card = (it: (typeof items)[number]) => (
     <View key={it.title} style={s.card}>
-      <View style={[s.cardHead, platePadding(11, 7)]}>
-        <Text style={[s.cardHeadText, { fontSize: 11 }]}>{it.title}</Text>
+      <View style={[s.cardHead, platePadding(CARD_HEAD_FS, 8)]}>
+        <Text style={[s.cardHeadText, { fontSize: CARD_HEAD_FS }]}>{it.title}</Text>
       </View>
       <View style={s.cardBody}>
         <Text style={s.cardText}>{clean(it.text)}</Text>
@@ -191,9 +208,9 @@ export function EcosystemSlide() {
 
   return (
     <Slide>
-      <SlideHead title={PITCH_ECOSYSTEM.title} size={28} />
-      <Text style={s.lead}>{clean(PITCH_ECOSYSTEM.lead)}</Text>
-      <View style={s.cardRow}>{items.slice(0, 3).map(card)}</View>
+      <SlideHead title={PITCH_ECOSYSTEM.title} size={28} style={{ marginBottom: 6 }} />
+      <Text style={[s.lead, { marginBottom: 18 }]}>{clean(PITCH_ECOSYSTEM.lead)}</Text>
+      <View style={[s.cardRow, s.cardRowGap]}>{items.slice(0, 3).map(card)}</View>
       {/* Нижний ряд из двух карточек центрируется распорками — так в макете. */}
       <View style={s.cardRow}>
         <View style={s.cardSpacer} />
@@ -224,7 +241,7 @@ export function JourneySlide() {
       </Overlay>
       <View style={s.journeyCol}>
         <Kicker>{PITCH_JOURNEY.kicker}</Kicker>
-        <Bullets items={PITCH_JOURNEY.values} size={10} gap={7} />
+        <Bullets items={PITCH_JOURNEY.values} size={11} gap={13} />
       </View>
       <Rich text={PITCH_JOURNEY.closing} style={s.journeyClosing} />
     </Slide>

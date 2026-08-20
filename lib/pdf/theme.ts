@@ -9,6 +9,7 @@
 import path from "node:path";
 import { Font } from "@react-pdf/renderer";
 import type { Style } from "@react-pdf/types";
+import { typography } from "./typography";
 
 /** Стиль react-pdf — для пропов `style` у собственных примитивов. */
 export type Sx = Style;
@@ -56,6 +57,8 @@ export const DECK = {
   fact: "#D9EAD3",
   /** Маркер списка. */
   bullet: "#A1E090",
+  /** Знак «Q» водяным знаком на белом листе. */
+  watermark: "#F5F5F5",
   /** Светло-серая карточка. */
   card: "#F3F3F3",
   /** Рамка карточек «экосистема из 5 типов SEO». */
@@ -69,7 +72,18 @@ export const DECK = {
   greyLight: "#9E9E9E",
   line: "#D9D9D9",
   white: "#FFFFFF",
+  /** Контакты в зелёном подвале: `note` на зелёном читался как «тусклый». */
+  footerText: "#EAF6E3",
 } as const;
+
+/**
+ * Прозрачность белых знаков «Q» на зелёных листах-разделителях. В коде было
+ * 0.12 — заказчик назвал фон тусклым, подняли до 0.2 (в макете знаки видны).
+ */
+export const GREEN_WATERMARK_OPACITY = 0.2;
+
+/** Прозрачность белого знака «Q» на обложке (правка «логотип очень тусклый»). */
+export const COVER_WATERMARK_OPACITY = 0.22;
 
 /**
  * Скругления. В макетах углы почти везде острые — скругление добавлено по
@@ -168,7 +182,64 @@ export function centerTextTop(h: number, fontSize: number) {
   return h / 2 - (fontSize / 2 + GLYPH_SINK_RATIO * fontSize);
 }
 
-/** В PT Sans нет глифов стрелок — заменяем на тире. */
+// --- Жёлтая плашка вокруг строки ------------------------------------------
+
+/**
+ * Где стоит глиф внутри строчной коробки — замерено рендером в 300 dpi
+ * (PT Sans, кегли 11.5 / 16 / 28, коэффициенты совпали до сотых):
+ *
+ *   • верх прописных — на `CAP_TOP_RATIO × кегль` ниже верха коробки, и от
+ *     `lineHeight` это расстояние **не зависит**: `lineHeight` растягивает
+ *     коробку только ВНИЗ;
+ *   • высота прописных — `CAP_RATIO × кегль`.
+ *
+ * Из этого и собирается `plateText`.
+ */
+const CAP_TOP_RATIO = 0.303;
+const CAP_RATIO = 0.72;
+
+/**
+ * Воздух над прописными и под базовой линией в жёлтой плашке, в долях кегля.
+ * Замер макета (слайд 12, «5 типов SEO»): плашка 38.4 pt при прописных
+ * 24.24 pt, сверху 6.96 pt, снизу 7.20 pt — то есть симметрично и ≈0.21 кегля.
+ */
+export const PLATE_GAP_RATIO = 0.21;
+
+/**
+ * Стиль строки внутри жёлтой плашки: воздух сверху и снизу одинаковый и задан
+ * числом, а не метриками шрифта.
+ *
+ * 🛑 Так выделение делается **плашкой** (`View` с фоном), а не
+ * `backgroundColor` на inline-`<Text>`. У inline-варианта высоту подложки
+ * задаёт строчная коробка, глиф сидит в её нижней части — подложка выпирает
+ * над прописными и почти касается базовой линии снизу. Здесь отрицательный
+ * `marginTop` подтягивает строку вверх (укорачивая плашку сверху), а
+ * `lineHeight` добирает ровно столько же воздуха снизу.
+ */
+export function plateText(fontSize: number) {
+  return {
+    lineHeight: PLATE_GAP_RATIO + CAP_TOP_RATIO + CAP_RATIO,
+    marginTop: (PLATE_GAP_RATIO - CAP_TOP_RATIO) * fontSize,
+  };
+}
+
+/** Боковые поля жёлтой плашки и пробел перед ней — тоже в долях кегля. */
+export const PLATE_INSET_RATIO = 0.22;
+export const PLATE_SPACE_RATIO = 0.26;
+
+/** Полная высота строки в плашке — нужна, чтобы считать межстрочные отступы. */
+export function plateLineHeight(fontSize: number) {
+  return (PLATE_GAP_RATIO + CAP_RATIO + PLATE_GAP_RATIO) * fontSize;
+}
+
+/**
+ * Подготовка строки к выводу: в PT Sans нет глифов стрелок (заменяем на тире),
+ * плюс типографика — неразрывные пробелы против висячих предлогов и одиноких
+ * слов в конце абзаца (см. lib/pdf/typography.ts).
+ *
+ * Через `clean()` (напрямую или через `rich()`) проходит каждая строка колоды —
+ * это единственная точка, где правила применяются ко всему PDF сразу.
+ */
 export function clean(str: string): string {
-  return str.replace(/[→←↔]/g, "—");
+  return typography(str.replace(/[→←↔]/g, "—"));
 }

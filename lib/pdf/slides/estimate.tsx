@@ -31,11 +31,19 @@ const s = StyleSheet.create({
   sectionTitle: { fontSize: 10, fontWeight: 700, color: DECK.ink, marginBottom: 4, lineHeight: 1.2 },
 
   paramsGrid: { flexDirection: "row", flexWrap: "wrap" },
-  paramBox: { width: "33.33%", paddingBottom: 5, paddingRight: 10 },
-  paramLabel: { fontSize: 6.5, color: DECK.grey, textTransform: "uppercase", lineHeight: 1.2 },
-  paramValue: { fontSize: 9.5, fontWeight: 700, color: DECK.ink, lineHeight: 1.2 },
+  // Отступ скупой намеренно: у длинных значений («больше 10000», «Очень
+  // высокая») строка переносится, левая колонка становится выше карточки
+  // стоимости, и лист идёт впритык.
+  paramBox: { width: "33.33%", paddingBottom: 4, paddingRight: 10 },
+  paramLabel: { fontSize: 7, color: DECK.grey, textTransform: "uppercase", lineHeight: 1.2 },
+  paramValue: { fontSize: 10, fontWeight: 700, color: DECK.ink, lineHeight: 1.25 },
 
-  costCard: { backgroundColor: DECK.fact, borderRadius: R.md, padding: 9 },
+  /**
+   * Самая высокая колонка листа: когда набор направлений одинаков во все
+   * месяцы, в карточке появляются ещё две строки («Без скидки» и «Экономия»).
+   * Паддинги здесь скупые именно поэтому — иначе таблица не влезает.
+   */
+  costCard: { backgroundColor: DECK.fact, borderRadius: R.md, padding: 8 },
   costLabel: {
     fontSize: 7.5,
     fontWeight: 700,
@@ -52,11 +60,11 @@ const s = StyleSheet.create({
     marginBottom: 6,
   },
   costPlateText: { fontSize: 19, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  costLine: { flexDirection: "row", justifyContent: "space-between", marginTop: 2 },
+  costLine: { flexDirection: "row", justifyContent: "space-between", marginTop: 1 },
   costLineLabel: { fontSize: 8, color: DECK.ink, lineHeight: 1.25 },
   costLineValue: { fontSize: 8, fontWeight: 700, color: DECK.ink, lineHeight: 1.25 },
   strike: { textDecoration: "line-through", color: DECK.muted, fontWeight: 400 },
-  divider: { height: 1, backgroundColor: DECK.white, marginVertical: 5 },
+  divider: { height: 1, backgroundColor: DECK.white, marginVertical: 4 },
   /** Итоги карточки — в строку: три стопки экономят ~25 pt высоты. */
   costStats: { flexDirection: "row" },
   costStat: { flex: 1 },

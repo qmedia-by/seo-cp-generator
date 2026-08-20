@@ -6,11 +6,11 @@
 // из `Proposal.projectManager`, а не из статичных текстов.
 
 import React from "react";
-import { Image, Link, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Link, StyleSheet, Text, View } from "@react-pdf/renderer";
 import { COMPANY } from "../../company";
 import { PITCH_PM, PITCH_TEAM } from "../../pitch";
 import type { ProposalManager } from "../../types";
-import { ICON, TEAM_PHOTO } from "../assets";
+import { TEAM_PHOTO } from "../assets";
 import type { PdfPhoto } from "../photos";
 import {
   Avatar,
@@ -24,35 +24,34 @@ import {
 import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
-  cols: { flexDirection: "row", gap: 20, marginTop: 2 },
+  cols: { flexDirection: "row", gap: 20, marginTop: 6 },
   col: { flex: 1 },
 
   // --- Профильная команда ---
-  role: { flexDirection: "row", marginBottom: 11 },
-  roleBody: { flex: 1, marginLeft: 8 },
-  roleTitle: { fontSize: 10.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  role: { flexDirection: "row", marginBottom: 15 },
+  roleBody: { flex: 1, marginLeft: 10 },
+  roleTitle: { fontSize: 11, fontWeight: 700, color: DECK.black, lineHeight: 1 },
   roleTitlePlate: {
     alignSelf: "flex-start",
     backgroundColor: DECK.yellow,
     borderRadius: R.sm,
-    paddingHorizontal: 3,
-    marginBottom: 3,
+    paddingHorizontal: 4,
+    marginBottom: 4,
   },
-  roleText: { fontSize: 8.5, lineHeight: 1.3, color: DECK.ink },
-  teamNote: { flexDirection: "row", alignItems: "center", marginTop: 4 },
-  clip: { width: 30, height: 30, marginRight: -12 },
-  teamNoteBox: { flex: 1, paddingLeft: 18 },
-  teamNoteLine: { fontSize: 8.5, lineHeight: 1.4 },
+  roleText: { fontSize: 9, lineHeight: 1.35, color: DECK.ink },
+  // Скрепку убрали по правке заказчика — плашка идёт во всю ширину колонки.
+  teamNote: { marginTop: 6, paddingVertical: 11, paddingHorizontal: 13 },
+  teamNoteLine: { fontSize: 9.5, lineHeight: 1.5 },
 
   // --- Project-менеджер ---
-  pmLead: { fontSize: 10, lineHeight: 1.35, marginBottom: 12 },
+  pmLead: { fontSize: 11, lineHeight: 1.4, marginBottom: 16 },
   pmCard: {
     backgroundColor: DECK.card,
     borderRadius: R.lg,
-    padding: 12,
+    padding: 14,
     flexDirection: "row",
   },
-  pmCardBody: { flex: 1, marginLeft: 12 },
+  pmCardBody: { flex: 1, marginLeft: 14 },
   pmName: {
     alignSelf: "flex-start",
     backgroundColor: DECK.yellow,
@@ -60,18 +59,32 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 5,
   },
-  pmNameText: { fontSize: 14, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  pmRole: { fontSize: 10, color: DECK.ink, marginBottom: 6 },
+  pmNameText: { fontSize: 15, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  pmRole: { fontSize: 10.5, color: DECK.ink, marginBottom: 8 },
   pmResume: {
-    fontSize: 9.5,
+    fontSize: 10,
     color: DECK.grey,
     textDecoration: "underline",
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  pmContact: { fontSize: 9.5, color: DECK.ink, textDecoration: "none", marginBottom: 2 },
-  pmNoteRow: { flexDirection: "row", alignItems: "flex-start", marginTop: 10 },
-  thumb: { width: 30, height: 30, marginRight: 10, marginTop: 2 },
-  pmNote: { fontSize: 9.5, fontStyle: "italic", lineHeight: 1.35, flex: 1 },
+  pmContact: { fontSize: 10, color: DECK.ink, textDecoration: "none", marginBottom: 3 },
+  /**
+   * Вывод слайда — жёлтая плашка во всю ширину листа (правка заказчика: было
+   * узкой врезкой в правой колонке, с иконкой-лайком; иконку убрали).
+   */
+  pmNotePlate: {
+    backgroundColor: DECK.yellow,
+    borderRadius: R.md,
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  pmNote: {
+    fontSize: 11,
+    fontStyle: "italic",
+    fontWeight: 700,
+    color: DECK.black,
+    lineHeight: 1.35,
+  },
 });
 
 /** Одна роль в составе команды: аватар, название на жёлтой плашке, описание. */
@@ -89,9 +102,9 @@ function Role({
 }) {
   return (
     <View style={s.role} wrap={false}>
-      <Avatar src={photo ?? null} name={name || title} size={34} />
+      <Avatar src={photo ?? null} name={name || title} size={38} />
       <View style={s.roleBody}>
-        <View style={[s.roleTitlePlate, platePadding(10.5, 3)]}>
+        <View style={[s.roleTitlePlate, platePadding(11, 3.5)]}>
           <Text style={s.roleTitle}>{title}</Text>
         </View>
         <Text style={s.roleText}>{clean(text)}</Text>
@@ -128,7 +141,7 @@ export function TeamSlide({
       <SlideHead
         title={PITCH_TEAM.title}
         subtitle={PITCH_TEAM.subtitle}
-        size={22}
+        size={24}
         subSize={15}
       />
       <View style={s.cols}>
@@ -141,17 +154,13 @@ export function TeamSlide({
           {right.map((r) => (
             <Role key={r.title} {...r} />
           ))}
-          {/* Скрепка «наезжает» на левый край плашки — как в макете. */}
-          <View style={s.teamNote}>
-            <Image src={ICON.clip} style={s.clip} />
-            <NoteBox style={s.teamNoteBox}>
-              {PITCH_TEAM.notes.map((n) => (
-                <Text key={n} style={s.teamNoteLine}>
-                  {clean(n)}
-                </Text>
-              ))}
-            </NoteBox>
-          </View>
+          <NoteBox style={s.teamNote}>
+            {PITCH_TEAM.notes.map((n) => (
+              <Text key={n} style={s.teamNoteLine}>
+                {clean(n)}
+              </Text>
+            ))}
+          </NoteBox>
         </View>
       </View>
     </Slide>
@@ -178,14 +187,14 @@ export function ProjectManagerSlide({
 
   return (
     <Slide>
-      <SlideHead title={PITCH_PM.title} size={20} />
+      <SlideHead title={PITCH_PM.title} size={24} />
       <View style={s.cols}>
         <View style={s.col}>
           <Text style={s.pmLead}>{rich(PITCH_PM.lead)}</Text>
           <View style={s.pmCard} wrap={false}>
-            <Avatar src={photo ?? null} name={name} size={62} />
+            <Avatar src={photo ?? null} name={name} size={68} ring={2.5} />
             <View style={s.pmCardBody}>
-              <View style={[s.pmName, platePadding(14, 4)]}>
+              <View style={[s.pmName, platePadding(15, 4.5)]}>
                 <Text style={s.pmNameText}>{name}</Text>
               </View>
               {!!role && <Text style={s.pmRole}>{role}</Text>}
@@ -212,13 +221,13 @@ export function ProjectManagerSlide({
         </View>
 
         <View style={s.col}>
-          <Kicker style={{ fontSize: 10 }}>{PITCH_PM.doTitle}</Kicker>
-          <Bullets items={PITCH_PM.does} size={10} gap={6} />
-          <View style={s.pmNoteRow}>
-            <Image src={ICON.thumb} style={s.thumb} />
-            <Text style={s.pmNote}>{clean(PITCH_PM.note)}</Text>
-          </View>
+          <Kicker style={{ fontSize: 11.5, marginBottom: 8 }}>{PITCH_PM.doTitle}</Kicker>
+          <Bullets items={PITCH_PM.does} size={11} gap={9} />
         </View>
+      </View>
+
+      <View style={[s.pmNotePlate, platePadding(11, 11)]}>
+        <Text style={s.pmNote}>{clean(PITCH_PM.note)}</Text>
       </View>
     </Slide>
   );

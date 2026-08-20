@@ -20,8 +20,8 @@ import { clean, DECK, platePadding, R } from "../theme";
 
 const s = StyleSheet.create({
   // --- О Qmedia ---
-  aboutRow: { flexDirection: "row", marginTop: 4 },
-  aboutLeft: { width: 250, paddingRight: 20 },
+  aboutRow: { flexDirection: "row", marginTop: 10 },
+  aboutLeft: { width: 258, paddingRight: 20 },
   aboutRight: { flex: 1 },
   factValue: {
     alignSelf: "flex-start",
@@ -30,59 +30,61 @@ const s = StyleSheet.create({
     paddingHorizontal: 4,
     marginBottom: 4,
   },
-  factValueText: { fontSize: 11.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  factText: { fontSize: 8.5, lineHeight: 1.35, marginBottom: 14 },
-  awardRow: { flexDirection: "row", gap: 12, marginBottom: 12 },
+  factValueText: { fontSize: 12.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  factText: { fontSize: 10, lineHeight: 1.4, marginTop: 6, marginBottom: 20 },
+  awardRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
   award: { width: 118, height: 167 },
   aboutBottom: { flexDirection: "row", gap: 20, alignItems: "center" },
-  clients: { width: 210, height: 89, objectFit: "contain" },
+  clients: { width: 220, height: 93, objectFit: "contain" },
   linkList: { flex: 1 },
   siteLink: {
-    fontSize: 10,
+    fontSize: 10.5,
     color: DECK.ink,
     textDecoration: "underline",
-    marginBottom: 6,
+    marginBottom: 8,
   },
 
   // --- Отзывы ---
-  reviewTop: { flexDirection: "row", alignItems: "flex-start", marginTop: 4 },
-  reviewLead: { width: 330, fontSize: 10, lineHeight: 1.4, paddingRight: 20 },
+  reviewTop: { flexDirection: "row", alignItems: "flex-start", marginTop: 8 },
+  reviewLead: { width: 350, fontSize: 11, lineHeight: 1.45, paddingRight: 20 },
   reviewCta: { flexDirection: "row", alignItems: "flex-end", marginTop: 2 },
-  reviewRow: { flexDirection: "row", gap: 12, marginTop: 14 },
-  review: { flex: 1, height: 158 },
+  reviewRow: { flexDirection: "row", gap: 12, marginTop: 40 },
+  review: { flex: 1, height: 178 },
 
   // --- Кейсы ---
   caseHead: { flexDirection: "row", alignItems: "flex-start" },
   caseHeadLeft: { flex: 1 },
   caseCta: { flexDirection: "row", alignItems: "flex-end", marginTop: 12 },
-  caseRow: { flexDirection: "row", gap: 16, marginTop: 6 },
+  caseRow: { flexDirection: "row", gap: 16, marginTop: 16 },
   caseCell: { flex: 1 },
-  caseCover: { width: "100%", height: 104, marginBottom: 8 },
-  caseTitle: { fontSize: 9.5, fontWeight: 700, lineHeight: 1.3, marginBottom: 8, flexGrow: 1 },
+  caseCover: { width: "100%", height: 118, marginBottom: 14 },
+  caseTitle: { fontSize: 10.5, fontWeight: 700, lineHeight: 1.35, marginBottom: 14, flexGrow: 1 },
 
   // --- Контакты ---
-  contactRow: { flexDirection: "row", marginTop: 10 },
+  // Вертикаль блока выровнена по макету: контент и карта начинаются на одной
+  // высоте и вместе доходят почти до подвала.
+  contactRow: { flexDirection: "row", marginTop: 52 },
   contactLeft: { flex: 1, paddingRight: 24 },
   plate: {
     alignSelf: "flex-start",
     backgroundColor: DECK.yellow,
     borderRadius: R.sm,
-    paddingHorizontal: 4,
-    marginBottom: 10,
+    paddingHorizontal: 5,
+    marginBottom: 18,
   },
-  plateText: { fontSize: 11.5, fontWeight: 700, color: DECK.black, lineHeight: 1 },
-  socialRow: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  socialIcon: { width: 24, height: 24, marginRight: 11, objectFit: "contain" },
-  phone: { fontSize: 12, color: DECK.ink, textDecoration: "none", marginLeft: 6 },
+  plateText: { fontSize: 12, fontWeight: 700, color: DECK.black, lineHeight: 1 },
+  socialRow: { flexDirection: "row", alignItems: "center", marginBottom: 24 },
+  socialIcon: { width: 26, height: 26, marginRight: 12, objectFit: "contain" },
+  phone: { fontSize: 12.5, color: DECK.ink, textDecoration: "none", marginLeft: 8 },
   email: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 700,
     color: DECK.ink,
     textDecoration: "none",
-    marginBottom: 16,
+    marginBottom: 28,
   },
-  address: { fontSize: 11, lineHeight: 1.35 },
-  map: { width: 318, height: 187 },
+  address: { fontSize: 11.5, lineHeight: 1.4 },
+  map: { width: 330, height: 196 },
 });
 
 /** Макет 33 — цифры о компании, награды, клиенты и разделы сайта. */
@@ -94,7 +96,7 @@ export function AboutSlide() {
         <View style={s.aboutLeft}>
           {PITCH_ABOUT.facts.map((f) => (
             <View key={f.value}>
-              <View style={[s.factValue, platePadding(11.5, 4)]}>
+              <View style={[s.factValue, platePadding(12.5, 4.5)]}>
                 <Text style={s.factValueText}>{f.value}</Text>
               </View>
               <Text style={s.factText}>{clean(f.text)}</Text>
@@ -201,7 +203,7 @@ export function ContactsSlide() {
       <SlideHead title={PITCH_CONTACTS.title} size={26} />
       <View style={s.contactRow}>
         <View style={s.contactLeft}>
-          <View style={[s.plate, platePadding(11.5, 4)]}>
+          <View style={[s.plate, platePadding(12, 4.5)]}>
             <Text style={s.plateText}>{PITCH_CONTACTS.callTitle}</Text>
           </View>
           <View style={s.socialRow}>
@@ -220,7 +222,7 @@ export function ContactsSlide() {
           <Link src={`mailto:${COMPANY.email}`} style={s.email}>
             {COMPANY.email}
           </Link>
-          <View style={[s.plate, platePadding(11.5, 4)]}>
+          <View style={[s.plate, platePadding(12, 4.5)]}>
             <Text style={s.plateText}>{PITCH_CONTACTS.officeTitle}</Text>
           </View>
           <Text style={s.address}>

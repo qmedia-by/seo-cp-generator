@@ -11,9 +11,10 @@ import { COMPANY } from "../../company";
 import type { ProposalManager } from "../../types";
 import { LOGO } from "../assets";
 import type { PdfPhoto } from "../photos";
-import { Avatar, GreenBg, Overlay } from "../primitives";
+import { Avatar, GreenBg, Overlay, QMark } from "../primitives";
 import {
   clean,
+  COVER_WATERMARK_OPACITY,
   DECK,
   FONT,
   PAGE_SIZE,
@@ -26,7 +27,7 @@ const TITLE_FS = 34;
 
 const s = StyleSheet.create({
   page: { fontFamily: FONT, position: "relative" },
-  ring: { position: "absolute", top: -60, left: 250, width: 500, height: 500, opacity: 0.15 },
+  ring: { position: "absolute", top: -60, left: 250, width: 500, height: 500 },
   logo: { position: "absolute", top: 20, left: 30.5, height: 62, width: 62 * WORDMARK_RATIO },
 
   title: { position: "absolute", top: 128, left: 25, width: 660 },
@@ -78,9 +79,10 @@ export function CoverSlide({
   return (
     <Page size={PAGE_SIZE} style={s.page}>
       <GreenBg />
-      {/* Кольцо «Q» — белое с прозрачностью 15%, как в макете. */}
+      {/* Кольцо «Q» — вектором: растр на 500 pt мылил, и заказчик просил
+          сделать знак заметнее (было 15% прозрачности). */}
       <Overlay>
-        <Image src={LOGO.qWhite} style={s.ring} />
+        <QMark color={DECK.white} opacity={COVER_WATERMARK_OPACITY} style={s.ring} />
       </Overlay>
       <Image src={LOGO.wordmarkWhite} style={s.logo} />
 
@@ -95,7 +97,7 @@ export function CoverSlide({
       <Text style={s.client}>для {clean(clientName)}</Text>
 
       <View style={s.manager}>
-        <Avatar src={photo ?? null} name={name} size={56} />
+        <Avatar src={photo ?? null} name={name} size={58} ring={2.5} />
         <View style={s.managerBody}>
           <Text style={s.preparedBy}>Подготовлено:</Text>
           <Text style={s.managerName}>{name}</Text>
