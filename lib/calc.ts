@@ -30,7 +30,14 @@ function coefValue(
   return table?.[input[key]] ?? 1;
 }
 
-/** Стоимость направления за месяц (BYN). 0 — если направление выключено. */
+/**
+ * «Сырая» цена направления за месяц по формуле Excel (BYN), без приведения
+ * к кратности ставки часа. 0 — если направление выключено.
+ *
+ * Готовая цена, которая уходит в КП, — это `quantizePrice` от этого числа
+ * (см. `calculate`): клиент видит цену и объём часов вместе, поэтому они обязаны
+ * сходиться между собой.
+ */
 export function directionMonthlyPrice(
   key: DirectionKey,
   input: ProposalInput,
@@ -54,6 +61,23 @@ export function priceToHours(
 }
 
 /**
+ * Привести цену к целому числу нормо-часов: **любая стоимость в КП кратна ставке
+ * часа** (по умолчанию 75 BYN). Без этого цена и объём часов в одной строке не
+ * сходились: «19 нч — 1 398 BYN» вместо 19 × 75 = 1 425 BYN.
+ *
+ * Округление — к ближайшему кратному, тем же ROUND, что и `priceToHours`, поэтому
+ * `priceToHours(quantizePrice(p)) × ставка === quantizePrice(p)`. Включённое
+ * направление не схлопывается в ноль: минимум один час.
+ */
+export function quantizePrice(
+  price: number,
+  hourRate: number = DEFAULT_CALC_CONFIG.hourRate,
+): number {
+  if (price <= 0) return 0;
+  return Math.max(1, Math.round(price / hourRate)) * hourRate;
+}
+
+/**
  * Полный расчёт по введённым параметрам и набору включённых направлений.
  * `directions` — любой массив объектов с полями key/included (DirectionSelection подходит).
  * Итог за месяц = сумма по включённым; итог за срок = месячный × durationMonths.
@@ -61,6 +85,10 @@ export function priceToHours(
  * Пакетная скидка (`config.bundle`): если включено направление-триггер
  * (по умолчанию Коммерческое SEO), включённые GEO и SERM считаются со скидкой 30%.
  * Часы следуют из цены со скидкой (как и везде в модели: часы = round(цена / ставка)).
+ *
+ * И полная цена, и цена со скидкой проходят через `quantizePrice` — в КП не бывает
+ * стоимости, не кратной ставке часа (скидка от кратной цены кратной не остаётся:
+ * 1275 × 0.7 = 892.5).
  */
 export function calculate(
   input: ProposalInput,
@@ -75,14 +103,17 @@ export function calculate(
 
   const perDirection: DirectionCalc[] = DIRECTION_ORDER.map((key) => {
     const included = includedByKey.get(key) ?? false;
-    const fullMonthlyPrice = directionMonthlyPrice(key, input, included, config);
+    const fullMonthlyPrice = quantizePrice(
+      directionMonthlyPrice(key, input, included, config),
+      config.hourRate,
+    );
     const discountRate =
       included && bundleActive && config.bundle.discounted.includes(key)
         ? config.bundle.rate
         : 0;
     const monthlyPrice =
       discountRate > 0
-        ? Math.round(fullMonthlyPrice * (1 - discountRate))
+        ? quantizePrice(fullMonthlyPrice * (1 - discountRate), config.hourRate)
         : fullMonthlyPrice;
     return {
       key,

@@ -8,7 +8,8 @@ import {
 import { DIRECTION_ORDER } from "../lib/seo-config";
 import type { ProposalInput } from "../lib/types";
 
-// Тот же пример, что в золотом тесте: полные цены 1525/1155/1307/825/540.
+// Тот же пример, что в золотом тесте: «сырые» цены по формуле — 1525/1155/1307/825/540,
+// в расчёте они приводятся к кратности ставки часа — 1500/1125/1275/825/525.
 const input: ProposalInput = {
   siteName: "example.by",
   region: "Вся РБ",
@@ -88,15 +89,16 @@ describe("calculate — расчёт по настроенному конфиг�
 
   it("базовая стоимость масштабирует цены", () => {
     const cfg = mergeCalcConfig({ baseCost: 1500 });
-    // 1500 × 1.4 × 1.1 × 1.0 × 1.2 × 1.1 = 3049.2 → 3049 (округление в конце, не ×2 от 1525).
-    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").fullMonthlyPrice).toBe(3049);
+    // 1500 × 1.4 × 1.1 × 1.0 × 1.2 × 1.1 = 3049.2 (округление в конце, не ×2 от 1525),
+    // дальше — к кратности ставки: 3049.2 / 75 = 40.66 → 41 ч × 75 = 3075.
+    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").fullMonthlyPrice).toBe(3075);
   });
 
-  it("стоимость часа меняет только объём часов", () => {
+  it("стоимость часа задаёт и объём часов, и шаг цены", () => {
     const cfg = mergeCalcConfig({ hourRate: 150 });
     const d = priceOf(calculate(input, allIncluded, cfg), "commercial");
-    expect(d.fullMonthlyPrice).toBe(1525);
     expect(d.monthlyHours).toBe(10); // round(1525 / 150)
+    expect(d.fullMonthlyPrice).toBe(1500); // 10 ч × 150 — цена кратна ставке
   });
 
   it("снятый коэффициент выпадает из формулы направления", () => {
@@ -106,13 +108,13 @@ describe("calculate — расчёт по настроенному конфиг�
         commercial: ["region", "audience", "pages", "errors", "experience", "linkBuilding"],
       },
     });
-    // Без множителя конкуренции (1.1): 750 × 1.4 × 1.1 × 1.2 = 1386.
-    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").fullMonthlyPrice).toBe(1386);
+    // Без множителя конкуренции (1.1): 750 × 1.4 × 1.1 × 1.2 = 1386 → 18 ч × 75 = 1350.
+    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").fullMonthlyPrice).toBe(1350);
   });
 
   it("правка коэффициента параметра меняет цену", () => {
     const cfg = mergeCalcConfig({ coef: { competition: { Средняя: 1.0 } } });
-    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").monthlyPrice).toBe(1386);
+    expect(priceOf(calculate(input, allIncluded, cfg), "commercial").monthlyPrice).toBe(1350);
   });
 
   it("пакетная скидка берёт процент и состав из настроек", () => {
@@ -120,7 +122,7 @@ describe("calculate — расчёт по настроенному конфиг�
       bundle: { trigger: "commercial", discounted: ["geo"], rate: 0.5 },
     });
     const res = calculate(input, allIncluded, cfg);
-    expect(priceOf(res, "geo").monthlyPrice).toBe(654); // round(1307 × 0.5)
+    expect(priceOf(res, "geo").monthlyPrice).toBe(675); // 1275 × 0.5 = 637.5 → 9 ч × 75
     expect(priceOf(res, "serm").monthlyPrice).toBe(825); // больше не в списке скидок
   });
 
@@ -128,7 +130,7 @@ describe("calculate — расчёт по настроенному конфиг�
     const cfg = mergeCalcConfig({ bundle: { rate: 0 } });
     const res = calculate(input, allIncluded, cfg);
     expect(res.monthlyDiscount).toBe(0);
-    expect(res.monthlyTotalPrice).toBe(5352); // сумма полных цен из золотого теста
+    expect(res.monthlyTotalPrice).toBe(5250); // сумма полных цен из золотого теста
   });
 });
 
@@ -137,7 +139,7 @@ describe("calculateSchedule — конфиг доходит до помесяч�
     const cfg = mergeCalcConfig({ bundle: { rate: 0 } });
     const dirs = DIRECTION_ORDER.map((key) => ({ key, activeMonths: [1, 2, 3] }));
     const res = calculateSchedule(input, dirs, cfg);
-    expect(res.totalPrice).toBe(5352 * 3);
+    expect(res.totalPrice).toBe(5250 * 3);
     expect(res.totalDiscount).toBe(0);
   });
 });

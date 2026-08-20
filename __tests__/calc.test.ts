@@ -5,6 +5,7 @@ import {
   directionMonthlyPrice,
   normalizeActiveMonths,
   priceToHours,
+  quantizePrice,
 } from "../lib/calc";
 import {
   formatAmount,
@@ -15,7 +16,7 @@ import {
   formatMonthlyMoney,
   formatMoney,
 } from "../lib/format";
-import { DIRECTION_ORDER } from "../lib/seo-config";
+import { DIRECTION_ORDER, HOUR_RATE } from "../lib/seo-config";
 import type { DirectionKey, ProposalInput } from "../lib/types";
 
 // Золотой тест: точные значения из кэша Расчет SEO.xlsx.
@@ -40,27 +41,67 @@ describe("calculate — золотой тест из Расчет SEO.xlsx (по
   const byKey = Object.fromEntries(res.perDirection.map((d) => [d.key, d]));
 
   // Эталон Excel — это ПОЛНЫЕ цены направлений (без пакетной скидки).
-  const expectedFull: Record<DirectionKey, { price: number; hours: number }> = {
-    commercial: { price: 1525, hours: 20 },
-    info: { price: 1155, hours: 15 },
-    geo: { price: 1307, hours: 17 },
-    serm: { price: 825, hours: 11 },
-    support: { price: 540, hours: 7 },
+  // `excel` — «сырая» цена по формуле, `price` — она же, приведённая к целому числу
+  // нормо-часов (все стоимости в КП кратны ставке 75 BYN), `hours` — часы из Excel.
+  const expectedFull: Record<
+    DirectionKey,
+    { excel: number; price: number; hours: number }
+  > = {
+    commercial: { excel: 1525, price: 1500, hours: 20 },
+    info: { excel: 1155, price: 1125, hours: 15 },
+    geo: { excel: 1307, price: 1275, hours: 17 },
+    serm: { excel: 825, price: 825, hours: 11 },
+    support: { excel: 540, price: 525, hours: 7 },
   };
 
   for (const key of DIRECTION_ORDER) {
     it(`${key}: полная цена ${expectedFull[key].price} BYN / ${expectedFull[key].hours} ч`, () => {
       expect(byKey[key].fullMonthlyPrice).toBe(expectedFull[key].price);
-      // directionMonthlyPrice не знает о пакетных скидках — это «чистый» Excel.
+      // directionMonthlyPrice не знает ни о скидках, ни о кратности — это «чистый» Excel.
       expect(directionMonthlyPrice(key, goldenInput, true)).toBe(
-        expectedFull[key].price,
+        expectedFull[key].excel,
       );
-      expect(priceToHours(expectedFull[key].price)).toBe(expectedFull[key].hours);
+      // Часы от кратной цены — те же, что в Excel, и сходятся с ценой без остатка.
+      expect(priceToHours(expectedFull[key].excel)).toBe(expectedFull[key].hours);
+      expect(byKey[key].monthlyHours * HOUR_RATE).toBe(byKey[key].monthlyPrice);
     });
   }
 
-  it("сумма полных цен за месяц: 5352 BYN", () => {
-    expect(res.monthlyTotalFullPrice).toBe(5352);
+  it("сумма полных цен за месяц: 5250 BYN", () => {
+    expect(res.monthlyTotalFullPrice).toBe(5250);
+  });
+});
+
+describe("quantizePrice — все стоимости кратны ставке часа", () => {
+  it("округляет до ближайшего кратного ставке", () => {
+    expect(quantizePrice(1398)).toBe(1425); // 18.64 ч → 19 ч
+    expect(quantizePrice(1500)).toBe(1500); // ровно 20 ч
+    expect(quantizePrice(892.5)).toBe(900); // 11.9 ч → 12 ч
+  });
+
+  it("ноль остаётся нулём, включённое направление — минимум час", () => {
+    expect(quantizePrice(0)).toBe(0);
+    expect(quantizePrice(10)).toBe(75);
+  });
+
+  it("работает от переданной ставки", () => {
+    expect(quantizePrice(1525, 150)).toBe(1500);
+  });
+
+  it("цены и часы в расчёте сходятся при любом наборе направлений", () => {
+    for (const key of DIRECTION_ORDER) {
+      const res = calculate(
+        goldenInput,
+        DIRECTION_ORDER.map((k) => ({ key: k, included: k === key })),
+      );
+      for (const d of res.perDirection) {
+        expect(d.monthlyPrice % HOUR_RATE).toBe(0);
+        expect(d.fullMonthlyPrice % HOUR_RATE).toBe(0);
+        expect(d.monthlyHours * HOUR_RATE).toBe(d.monthlyPrice);
+      }
+      expect(res.monthlyTotalPrice % HOUR_RATE).toBe(0);
+      expect(res.monthlyDiscount % HOUR_RATE).toBe(0);
+    }
   });
 });
 
@@ -71,27 +112,27 @@ describe("calculate — пакетная скидка при Коммерчес�
   it("GEO и SERM получают −30% при включённом Коммерческом", () => {
     expect(byKey.geo.discountRate).toBe(0.3);
     expect(byKey.serm.discountRate).toBe(0.3);
-    expect(byKey.geo.monthlyPrice).toBe(915); // round(1307 × 0.7)
-    expect(byKey.serm.monthlyPrice).toBe(578); // round(825 × 0.7)
-    expect(byKey.geo.monthlyHours).toBe(12); // round(915 / 75)
-    expect(byKey.serm.monthlyHours).toBe(8); // round(578 / 75)
+    expect(byKey.geo.monthlyPrice).toBe(900); // 1275 × 0.7 = 892.5 → 12 ч × 75
+    expect(byKey.serm.monthlyPrice).toBe(600); // 825 × 0.7 = 577.5 → 8 ч × 75
+    expect(byKey.geo.monthlyHours).toBe(12); // 900 / 75
+    expect(byKey.serm.monthlyHours).toBe(8); // 600 / 75
   });
 
   it("Коммерческое / Информационное / Техподдержка — без скидки", () => {
     expect(byKey.commercial.discountRate).toBe(0);
     expect(byKey.info.discountRate).toBe(0);
     expect(byKey.support.discountRate).toBe(0);
-    expect(byKey.commercial.monthlyPrice).toBe(1525);
-    expect(byKey.info.monthlyPrice).toBe(1155);
-    expect(byKey.support.monthlyPrice).toBe(540);
+    expect(byKey.commercial.monthlyPrice).toBe(1500);
+    expect(byKey.info.monthlyPrice).toBe(1125);
+    expect(byKey.support.monthlyPrice).toBe(525);
   });
 
-  it("итог за месяц со скидкой: 4713 BYN / 62 ч, скидка 639 BYN", () => {
-    expect(res.monthlyTotalPrice).toBe(4713);
+  it("итог за месяц со скидкой: 4650 BYN / 62 ч, скидка 600 BYN", () => {
+    expect(res.monthlyTotalPrice).toBe(4650);
     expect(res.monthlyTotalHours).toBe(62);
-    expect(res.monthlyTotalFullPrice).toBe(5352);
-    expect(res.monthlyDiscount).toBe(639);
-    expect(res.totalPrice).toBe(4713 * 3);
+    expect(res.monthlyTotalFullPrice).toBe(5250);
+    expect(res.monthlyDiscount).toBe(600);
+    expect(res.totalPrice).toBe(4650 * 3);
     expect(res.totalHours).toBe(62 * 3);
   });
 
@@ -103,7 +144,7 @@ describe("calculate — пакетная скидка при Коммерчес�
     const r = calculate(goldenInput, noCommercial);
     const bk = Object.fromEntries(r.perDirection.map((d) => [d.key, d]));
     expect(bk.geo.discountRate).toBe(0);
-    expect(bk.geo.monthlyPrice).toBe(1307);
+    expect(bk.geo.monthlyPrice).toBe(1275);
     expect(bk.serm.monthlyPrice).toBe(825);
     expect(r.monthlyDiscount).toBe(0);
   });
@@ -117,7 +158,7 @@ describe("calculate — пакетная скидка при Коммерчес�
     const r = calculate(goldenInput, sel);
     const bk = Object.fromEntries(r.perDirection.map((d) => [d.key, d]));
     expect(bk.serm.discountRate).toBe(0.3);
-    expect(bk.serm.monthlyPrice).toBe(578);
+    expect(bk.serm.monthlyPrice).toBe(600);
     expect(bk.geo.discountRate).toBe(0); // выключен → скидки нет
     expect(bk.geo.monthlyPrice).toBe(0);
   });
@@ -130,7 +171,7 @@ describe("calculate — выключенные направления", () => {
       included: key === "commercial",
     }));
     const res = calculate(goldenInput, onlyCommercial);
-    expect(res.monthlyTotalPrice).toBe(1525);
+    expect(res.monthlyTotalPrice).toBe(1500);
     expect(res.monthlyTotalHours).toBe(20);
     for (const d of res.perDirection) {
       if (d.key !== "commercial") {
@@ -142,7 +183,7 @@ describe("calculate — выключенные направления", () => {
 
   it("при 6 мес итог удваивается относительно 3 мес", () => {
     const res6 = calculate({ ...goldenInput, durationMonths: 6 }, allIncluded);
-    expect(res6.totalPrice).toBe(4713 * 6);
+    expect(res6.totalPrice).toBe(4650 * 6);
   });
 });
 
@@ -156,11 +197,11 @@ describe("calculateSchedule — помесячный набор направле
   it("равномерный набор: итог = месячный × срок (как старая логика)", () => {
     const res = calculateSchedule(input6, allActive);
     expect(res.months).toHaveLength(6);
-    expect(res.totalPrice).toBe(4713 * 6);
+    expect(res.totalPrice).toBe(4650 * 6);
     expect(res.totalHours).toBe(62 * 6);
-    expect(res.totalFullPrice).toBe(5352 * 6);
-    expect(res.totalDiscount).toBe(639 * 6);
-    res.months.forEach((m) => expect(m.monthlyTotalPrice).toBe(4713));
+    expect(res.totalFullPrice).toBe(5250 * 6);
+    expect(res.totalDiscount).toBe(600 * 6);
+    res.months.forEach((m) => expect(m.monthlyTotalPrice).toBe(4650));
   });
 
   it("SERM только в первые 2 месяца — учитывается лишь в них", () => {
@@ -172,12 +213,12 @@ describe("calculateSchedule — помесячный набор направле
     const serm = res.perDirection.find((d) => d.key === "serm")!;
     expect(serm.activeMonths).toEqual([1, 2]);
     expect(serm.monthsLabel).toBe("мес. 1–2");
-    // SERM со скидкой (Коммерческое активно) = 578/мес × 2 = 1156.
-    expect(serm.totalPrice).toBe(578 * 2);
-    // Месяцы 1–2 — полный набор (4713), месяцы 3–6 — без SERM (4713 − 578).
-    expect(res.months[0].monthlyTotalPrice).toBe(4713);
-    expect(res.months[2].monthlyTotalPrice).toBe(4713 - 578);
-    expect(res.totalPrice).toBe(4713 * 2 + (4713 - 578) * 4);
+    // SERM со скидкой (Коммерческое активно) = 600/мес × 2 = 1200.
+    expect(serm.totalPrice).toBe(600 * 2);
+    // Месяцы 1–2 — полный набор (4650), месяцы 3–6 — без SERM (4650 − 600).
+    expect(res.months[0].monthlyTotalPrice).toBe(4650);
+    expect(res.months[2].monthlyTotalPrice).toBe(4650 - 600);
+    expect(res.totalPrice).toBe(4650 * 2 + (4650 - 600) * 4);
   });
 
   it("скидка помесячна: GEO со скидкой только там, где активно Коммерческое", () => {
@@ -187,14 +228,14 @@ describe("calculateSchedule — помесячный набор направле
     ];
     const res = calculateSchedule(input6, dirs);
     const geo = res.perDirection.find((d) => d.key === "geo")!;
-    // Мес. 1–2 — скидка (915), мес. 3–6 — полная (1307).
-    expect(res.months[0].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(915);
-    expect(res.months[2].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(1307);
-    expect(geo.totalPrice).toBe(915 * 2 + 1307 * 4);
-    expect(geo.totalFullPrice).toBe(1307 * 6);
+    // Мес. 1–2 — скидка (900), мес. 3–6 — полная (1275).
+    expect(res.months[0].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(900);
+    expect(res.months[2].perDirection.find((d) => d.key === "geo")!.monthlyPrice).toBe(1275);
+    expect(geo.totalPrice).toBe(900 * 2 + 1275 * 4);
+    expect(geo.totalFullPrice).toBe(1275 * 6);
     // Помесячные величины (из них КП показывает платёж «в месяц»).
-    expect(geo.pricePerMonth).toEqual([915, 915, 1307, 1307, 1307, 1307]);
-    expect(geo.fullPricePerMonth).toEqual([1307, 1307, 1307, 1307, 1307, 1307]);
+    expect(geo.pricePerMonth).toEqual([900, 900, 1275, 1275, 1275, 1275]);
+    expect(geo.fullPricePerMonth).toEqual([1275, 1275, 1275, 1275, 1275, 1275]);
     expect(geo.hoursPerMonth).toEqual([12, 12, 17, 17, 17, 17]);
   });
 
@@ -216,7 +257,7 @@ describe("calculateSchedule — помесячный набор направле
   it("обратная совместимость: старый included → все месяцы", () => {
     const dirs = DIRECTION_ORDER.map((key) => ({ key, included: true }));
     const res = calculateSchedule(input6, dirs);
-    expect(res.totalPrice).toBe(4713 * 6);
+    expect(res.totalPrice).toBe(4650 * 6);
     res.perDirection.forEach((d) =>
       expect(d.activeMonths).toEqual([1, 2, 3, 4, 5, 6]),
     );
