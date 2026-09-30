@@ -290,18 +290,28 @@ describe("formatMonthRanges", () => {
 describe("помесячные форматтеры (акцент КП — платёж за месяц)", () => {
   // Ожидания строим через базовые форматтеры: в ru-RU разделитель групп —
   // неразрывный пробел, литерал в тесте с ним не совпал бы.
+  const byn = { currency: "BYN", decimals: 2 };
   it("одинаковые месяцы — одно число, разные — «от»", () => {
-    expect(formatMonthlyMoney([4713, 4713, 4713])).toBe(formatMoney(4713));
-    expect(formatMonthlyMoney([4713, 2134])).toBe(`от ${formatMoney(2134)}`);
-    expect(formatMonthlyAmount([4713, 2134])).toBe(`от ${formatAmount(2134)}`);
+    expect(formatMonthlyMoney([4713, 4713, 4713], byn)).toBe(formatMoney(4713, byn));
+    expect(formatMonthlyMoney([4713, 2134], byn)).toBe(`от ${formatMoney(2134, byn)}`);
+    expect(formatMonthlyAmount([4713, 2134], 2)).toBe(`от ${formatAmount(2134, 2)}`);
     expect(formatMonthlyHours([62, 62])).toBe(formatHours(62));
     expect(formatMonthlyHours([62, 28])).toBe(`от ${formatHours(28)}`);
   });
 
   it("нули (месяц без работ) не занижают платёж, пустой набор — прочерк", () => {
-    expect(formatMonthlyMoney([0, 4713, 4713])).toBe(formatMoney(4713));
-    expect(formatMonthlyMoney([])).toBe("—");
-    expect(formatMonthlyAmount([0])).toBe("—");
+    expect(formatMonthlyMoney([0, 4713, 4713], byn)).toBe(formatMoney(4713, byn));
+    expect(formatMonthlyMoney([], byn)).toBe("—");
+    expect(formatMonthlyAmount([0], 2)).toBe("—");
+  });
+
+  it("разрядность валюты: до сотых или целые", () => {
+    const nbsp = "\u00a0";
+    expect(formatMoney(1425, byn)).toBe(`1${nbsp}425,00 BYN`);
+    expect(formatMoney(3345000, { currency: "руб.", decimals: 0 })).toBe(
+      `3${nbsp}345${nbsp}000 руб.`,
+    );
+    expect(formatAmount(427.5, 2)).toBe("427,50");
   });
 });
 

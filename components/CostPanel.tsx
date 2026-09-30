@@ -47,12 +47,12 @@ export default function CostPanel({
                     discounted ? (
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span className="text-white/40 line-through text-xs">
-                          {formatMoney(d.totalFullPrice)}
+                          {formatMoney(d.totalFullPrice, calc)}
                         </span>
-                        <span>{formatMoney(d.totalPrice)}</span>
+                        <span>{formatMoney(d.totalPrice, calc)}</span>
                       </span>
                     ) : (
-                      formatMoney(d.totalPrice)
+                      formatMoney(d.totalPrice, calc)
                     )
                   ) : (
                     "—"
@@ -77,7 +77,7 @@ export default function CostPanel({
             >
               <span className="text-white/55">Месяц {m.month}</span>
               <span className="text-white/90">
-                {formatMoney(m.monthlyTotalPrice)}
+                {formatMoney(m.monthlyTotalPrice, calc)}
                 <span className="text-white/40 ml-1.5">
                   {formatHours(m.monthlyTotalHours)}
                 </span>
@@ -92,12 +92,12 @@ export default function CostPanel({
           <>
             <Row
               label="Без скидки за срок"
-              value={formatMoney(calc.totalFullPrice)}
+              value={formatMoney(calc.totalFullPrice, calc)}
             />
             <div className="flex items-baseline justify-between text-brand-yellow">
               <span className="text-sm">Скидка за срок</span>
               <span className="font-semibold">
-                −{formatMoney(calc.totalDiscount)}
+                −{formatMoney(calc.totalDiscount, calc)}
               </span>
             </div>
           </>
@@ -108,7 +108,7 @@ export default function CostPanel({
             Итого за {pluralMonths(calc.durationMonths)}
           </div>
           <div className="text-2xl font-extrabold leading-tight">
-            {formatMoney(calc.totalPrice)}
+            {formatMoney(calc.totalPrice, calc)}
           </div>
           <div className="text-xs opacity-70">
             {formatHours(calc.totalHours)} работ

@@ -12,6 +12,14 @@ import {
   REGION_OPTIONS,
 } from "./seo-config";
 import { MAX_WORKS_PER_DIRECTION, MAX_WORK_LENGTH } from "./works-config";
+import {
+  CURRENCY_DECIMALS,
+  CURRENCY_NAME_HINT,
+  CURRENCY_NAME_MAX,
+  MAX_CURRENCIES,
+  currencyKey,
+  hourRateFitsDecimals,
+} from "./calc-config";
 
 const asEnum = <T extends string>(values: readonly T[]) =>
   z.enum(values as unknown as [T, ...T[]]);
@@ -34,6 +42,13 @@ const coefficientKeySchema = z.enum([
   "competition",
 ]);
 
+/** Название валюты (в настройках и в `input.currency`). */
+const currencyNameSchema = z
+  .string({ required_error: "Выберите валюту" })
+  .trim()
+  .min(1, "Укажите название валюты")
+  .max(CURRENCY_NAME_MAX, `Название валюты — ${CURRENCY_NAME_HINT}`);
+
 export const inputSchema = z.object({
   siteName: z.string().trim().min(1, "Укажите название сайта").max(200),
   region: asEnum(REGION_OPTIONS),
@@ -45,6 +60,8 @@ export const inputSchema = z.object({
   errors: asEnum(ERRORS_OPTIONS),
   linkBuilding: asEnum(LINK_BUILDING_OPTIONS),
   competition: asEnum(COMPETITION_OPTIONS),
+  // Необязательна только для импорта КП, сохранённых до выбора валюты (они в BYN).
+  currency: currencyNameSchema.optional(),
 });
 
 const workItemSchema = z.object({
@@ -118,6 +135,7 @@ const proposalBaseSchema = z.object({
  * в форме больше нет, и КП без менеджера с Project-менеджером не заводится.
  */
 export const createProposalSchema = proposalBaseSchema.extend({
+  input: inputSchema.extend({ currency: currencyNameSchema }),
   manager: proposalManagerSchema,
   projectManager: proposalManagerSchema,
 });
@@ -148,6 +166,32 @@ const coefNumber = positiveNumber.max(1000);
 /** Денежная величина (базовая стоимость, ставка часа). */
 const priceNumber = positiveNumber.max(1_000_000);
 
+/** Ставки по валютам: хотя бы одна, имена не повторяются (без учёта регистра). */
+const currenciesSchema = z
+  .array(
+    z
+      .object({
+        name: currencyNameSchema,
+        baseCost: priceNumber,
+        hourRate: priceNumber,
+        decimals: z.union([
+          z.literal(CURRENCY_DECIMALS[0]),
+          z.literal(CURRENCY_DECIMALS[1]),
+        ]),
+      })
+      .refine((c) => hourRateFitsDecimals(c.hourRate, c.decimals), {
+        message:
+          "Знаков после запятой у стоимости часа не больше, чем в разрядности сумм (у целых сумм — целое число)",
+        path: ["hourRate"],
+      }),
+  )
+  .min(1, "Нужна хотя бы одна валюта")
+  .max(MAX_CURRENCIES, `Не больше ${MAX_CURRENCIES} валют`)
+  .refine(
+    (list) => new Set(list.map((c) => currencyKey(c.name))).size === list.length,
+    { message: "Названия валют не должны повторяться" },
+  );
+
 /** Таблица «вариант → коэффициент»: требуются все варианты из списка опций. */
 const coefTableSchema = <T extends string>(values: readonly T[]) =>
   z.object(
@@ -174,8 +218,7 @@ export const worksConfigSchema = directionRecord(
 );
 
 export const calcConfigSchema = z.object({
-  baseCost: priceNumber,
-  hourRate: priceNumber,
+  currencies: currenciesSchema,
   directionCoef: directionRecord(coefNumber),
   directionCoefficients: directionRecord(z.array(coefficientKeySchema)),
   bundle: z.object({

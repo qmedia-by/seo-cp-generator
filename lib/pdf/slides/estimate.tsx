@@ -21,10 +21,19 @@ import {
 } from "../../format";
 import type { ProposalInput, ScheduleResult } from "../../types";
 import { Slide, SlideHead, SumText } from "../primitives";
-import { DECK, platePadding, R } from "../theme";
+import { DECK, fitNumberSize, PAD_X, PAGE_W, platePadding, R } from "../theme";
 
 /** Кегль платежа в месяц на жёлтой плашке; им же кормится `platePadding`. */
 const COST_PLATE_FS = 19;
+
+/** Боковые поля строк таблицы «Состав по месяцам». */
+const TABLE_PAD_X = 8;
+/** Доля ширины таблицы под колонки месяцев (делится поровну на срок). */
+const MONTHS_SHARE = 0.38;
+/** Кегль строки «Итого» — пока помесячные суммы влезают в колонки месяцев. */
+const TOTAL_FS = 9;
+/** Воздух между помесячными суммами соседних колонок в строке «Итого». */
+const TOTAL_MONTH_GAP = 4;
 
 const s = StyleSheet.create({
   cols: { flexDirection: "row", gap: 18, marginBottom: 4 },
@@ -79,13 +88,13 @@ const s = StyleSheet.create({
     backgroundColor: DECK.green,
     borderRadius: R.sm,
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: TABLE_PAD_X,
   },
   tHeadCell: { fontSize: 8, fontWeight: 700, color: DECK.white, lineHeight: 1 },
   tRow: {
     flexDirection: "row",
     paddingVertical: 2,
-    paddingHorizontal: 8,
+    paddingHorizontal: TABLE_PAD_X,
     borderBottomWidth: 0.5,
     borderBottomColor: DECK.cardLine,
     alignItems: "center",
@@ -96,11 +105,11 @@ const s = StyleSheet.create({
     backgroundColor: DECK.fact,
     borderRadius: R.sm,
     paddingVertical: 5,
-    paddingHorizontal: 8,
+    paddingHorizontal: TABLE_PAD_X,
     marginTop: 3,
     alignItems: "center",
   },
-  tTotalCell: { fontSize: 9, fontWeight: 700, color: DECK.ink, lineHeight: 1.2 },
+  tTotalCell: { fontWeight: 700, color: DECK.ink, lineHeight: 1.2 },
   right: { textAlign: "right" },
   center: { textAlign: "center" },
   muted: { color: DECK.grey },
@@ -121,7 +130,22 @@ export function EstimateSlide({
   const nameW = "30%";
   const perMonthW = "16%";
   const termW = "16%";
-  const monthW = `${38 / calc.durationMonths}%`;
+  const monthW = `${(MONTHS_SHARE * 100) / calc.durationMonths}%`;
+
+  // Помесячные итоги стоят в узких колонках месяцев: у крупных валют (рубли,
+  // тенге) «557 500» в 6 колонок уже не влезает и слипается с соседями. Тогда
+  // ужимаем кегль — сразу всей строки «Итого»: в строке таблицы кегли ячеек
+  // обязаны совпадать, иначе react-pdf разводит текст по высоте.
+  const monthTotals = calc.months.map((m) =>
+    formatInt(Math.round(m.monthlyTotalPrice)),
+  );
+  const tableW = PAGE_W - 2 * PAD_X - 2 * TABLE_PAD_X;
+  const totalFs = fitNumberSize(
+    monthTotals,
+    (tableW * MONTHS_SHARE) / calc.durationMonths - TOTAL_MONTH_GAP,
+    TOTAL_FS,
+  );
+  const totalCell = [s.tTotalCell, { fontSize: totalFs }];
 
   // Помесячные величины проекта. Считаем по месяцам, где есть работы: месяц без
   // единого активного направления не должен занижать «платёж в месяц» до нуля.
@@ -178,7 +202,7 @@ export function EstimateSlide({
             <Text style={s.costLabel}>Платёж в месяц</Text>
             <View style={[s.costPlate, platePadding(COST_PLATE_FS, 6)]}>
               <SumText
-                text={formatMonthlyMoney(monthlyPrices)}
+                text={formatMonthlyMoney(monthlyPrices, calc)}
                 size={COST_PLATE_FS}
                 style={s.costPlateText}
               />
@@ -189,7 +213,7 @@ export function EstimateSlide({
                   <View style={s.costLine}>
                     <Text style={s.costLineLabel}>Без скидки в месяц</Text>
                     <Text style={[s.costLineValue, s.strike]}>
-                      {formatMoney(monthlyFullPrices[0])}
+                      {formatMoney(monthlyFullPrices[0], calc)}
                     </Text>
                   </View>
                 )}
@@ -201,6 +225,7 @@ export function EstimateSlide({
                   <Text style={[s.costLineValue, { color: DECK.greenDeep }]}>
                     {formatMoney(
                       sameEveryMonth ? monthlyDiscounts[0] : calc.totalDiscount,
+                      calc,
                     )}
                   </Text>
                 </View>
@@ -220,7 +245,9 @@ export function EstimateSlide({
               </View>
               <View style={s.costStat}>
                 <Text style={s.costStatLabel}>Итого за {term}</Text>
-                <Text style={s.costStatValue}>{formatMoney(calc.totalPrice)}</Text>
+                <Text style={s.costStatValue}>
+                  {formatMoney(calc.totalPrice, calc)}
+                </Text>
               </View>
             </View>
           </View>
@@ -261,7 +288,9 @@ export function EstimateSlide({
                 included && discounted ? { color: DECK.greenDeep } : {},
               ]}
             >
-              {included ? formatMonthlyAmount(d.pricePerMonth) : "—"}
+              {included
+                ? formatMonthlyAmount(d.pricePerMonth, calc.decimals)
+                : "—"}
             </Text>
             {monthNums.map((m) => (
               <View key={m} style={[s.dotCell, { width: monthW }]}>
@@ -276,24 +305,24 @@ export function EstimateSlide({
                 included ? s.muted : s.muted,
               ]}
             >
-              {included ? formatAmount(d.totalPrice) : "—"}
+              {included ? formatAmount(d.totalPrice, calc.decimals) : "—"}
             </Text>
           </View>
         );
       })}
 
       <View style={s.tTotal} wrap={false}>
-        <Text style={[s.tTotalCell, { width: nameW }]}>Итого, {calc.currency}</Text>
-        <Text style={[s.tTotalCell, s.right, { width: perMonthW }]}>
-          {formatMonthlyAmount(monthlyPrices)}
+        <Text style={[...totalCell, { width: nameW }]}>Итого, {calc.currency}</Text>
+        <Text style={[...totalCell, s.right, { width: perMonthW }]}>
+          {formatMonthlyAmount(monthlyPrices, calc.decimals)}
         </Text>
-        {calc.months.map((m) => (
-          <Text key={m.month} style={[s.tTotalCell, s.center, { width: monthW }]}>
-            {formatInt(Math.round(m.monthlyTotalPrice))}
+        {calc.months.map((m, i) => (
+          <Text key={m.month} style={[...totalCell, s.center, { width: monthW }]}>
+            {monthTotals[i]}
           </Text>
         ))}
-        <Text style={[s.tTotalCell, s.right, { width: termW }]}>
-          {formatAmount(calc.totalPrice)}
+        <Text style={[...totalCell, s.right, { width: termW }]}>
+          {formatAmount(calc.totalPrice, calc.decimals)}
         </Text>
       </View>
     </Slide>

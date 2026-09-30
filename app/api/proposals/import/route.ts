@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getCalcConfig } from "@/lib/settings";
-import { buildProposal, saveProposal } from "@/lib/storage";
+import {
+  buildProposal,
+  proposalCurrencyError,
+  saveProposal,
+} from "@/lib/storage";
 import { importProposalSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -9,7 +13,8 @@ export const dynamic = "force-dynamic";
 // Импорт ранее сохранённого JSON: берём только input/directions/meta/manager,
 // заново считаем расчёт и сохраняем как новое КП (новый id и дата).
 // Расчёт идёт по ТЕКУЩИМ настройкам, а не по снимку из файла — это штатный
-// способ пересчитать старое КП после правки коэффициентов.
+// способ пересчитать старое КП после правки коэффициентов. Валюта при этом
+// остаётся из файла (нет — BYN) и должна быть в настройках, иначе 400.
 // Схема здесь своя (`importProposalSchema`): менеджеры необязательны, иначе
 // перестали бы открываться КП, сохранённые до того, как выбор человека стал
 // обязательным.
@@ -32,7 +37,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const proposal = buildProposal(parsed.data, await getCalcConfig());
+  const config = await getCalcConfig();
+  const currencyError = proposalCurrencyError(parsed.data, config);
+  if (currencyError) {
+    return NextResponse.json({ error: currencyError }, { status: 400 });
+  }
+
+  const proposal = buildProposal(parsed.data, config);
   await saveProposal(proposal);
   return NextResponse.json(proposal, { status: 201 });
 }

@@ -1,21 +1,39 @@
 // Форматирование чисел/денег/дат в русском стиле (как в референсе: «9 480,00 BYN»).
 
-import { CURRENCY } from "./seo-config";
+/**
+ * Как печатать суммы КП: подпись валюты и разрядность (знаков после запятой).
+ * Этой формы — `ScheduleResult`/`CalcResult`, поэтому в форматтеры передают
+ * сам расчёт: `formatMoney(x, calc)`.
+ */
+export interface MoneyFormat {
+  currency: string;
+  decimals: number;
+}
 
-const moneyFmt = new Intl.NumberFormat("ru-RU", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+const amountFmts = new Map<number, Intl.NumberFormat>();
 
 const intFmt = new Intl.NumberFormat("ru-RU");
 
-export function formatMoney(value: number, currency = CURRENCY): string {
-  return `${formatAmount(value)} ${currency}`;
+/**
+ * Валюта — обязательный аргумент: у КП своя валюта и разрядность
+ * (`calc.currency`/`calc.decimals`), и дефолт здесь молча печатал бы
+ * «…,00 BYN» там, где её забыли передать.
+ */
+export function formatMoney(value: number, money: MoneyFormat): string {
+  return `${formatAmount(value, money.decimals)} ${money.currency}`;
 }
 
 /** Сумма без валюты — для таблиц, где валюта вынесена в шапку колонки. */
-export function formatAmount(value: number): string {
-  return moneyFmt.format(value);
+export function formatAmount(value: number, decimals: number): string {
+  let fmt = amountFmts.get(decimals);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat("ru-RU", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    amountFmts.set(decimals, fmt);
+  }
+  return fmt.format(value);
 }
 
 export function formatInt(value: number): string {
@@ -46,13 +64,13 @@ function formatPerMonth(values: number[], fmt: (v: number) => string): string {
 }
 
 /** «5 952,00 BYN» / «от 4 100,00 BYN» — платёж за один месяц. */
-export function formatMonthlyMoney(values: number[], currency = CURRENCY): string {
-  return formatPerMonth(values, (v) => formatMoney(v, currency));
+export function formatMonthlyMoney(values: number[], money: MoneyFormat): string {
+  return formatPerMonth(values, (v) => formatMoney(v, money));
 }
 
 /** То же без валюты — для колонок таблицы. */
-export function formatMonthlyAmount(values: number[]): string {
-  return formatPerMonth(values, formatAmount);
+export function formatMonthlyAmount(values: number[], decimals: number): string {
+  return formatPerMonth(values, (v) => formatAmount(v, decimals));
 }
 
 /** «62 ч» / «от 45 ч» — объём работ за один месяц. */

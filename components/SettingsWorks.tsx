@@ -261,7 +261,8 @@ function short(text: string): string {
   return text.length > 60 ? `${text.slice(0, 60)}…` : text;
 }
 
-function IconButton({
+/** Квадратная кнопка-значок (↑/↓/✕); общая для вкладок настроек. */
+export function IconButton({
   label,
   disabled,
   onClick,

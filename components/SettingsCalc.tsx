@@ -3,20 +3,42 @@
 import { useMemo, useState } from "react";
 import {
   COEF_GROUPS,
+  CURRENCY_DECIMALS,
+  CURRENCY_NAME_HINT,
+  CURRENCY_NAME_MAX,
+  MAX_CURRENCIES,
   cloneCalcConfig,
+  currencyKey,
+  hourRateFitsDecimals,
+  normalizeCurrencyName,
   type CalcConfig,
+  type CurrencyDecimals,
 } from "@/lib/calc-config";
 import { DIRECTION_NAME, DIRECTION_ORDER } from "@/lib/seo-config";
 import type { CoefficientKey, DirectionKey } from "@/lib/types";
+import { IconButton } from "./SettingsWorks";
 
 /**
  * Черновик формы: все числовые поля живут строками, иначе промежуточный ввод
  * («1,» или пустое поле) невозможно набрать. В конфиг превращается при сохранении
  * (`fromDraft`), там же собираются понятные ошибки.
  */
-interface CalcDraft {
+interface CurrencyDraft {
+  name: string;
   baseCost: string;
   hourRate: string;
+  decimals: CurrencyDecimals;
+}
+
+/** Подписи разрядности в форме — сразу примером, как сумма выглядит в КП. */
+const DECIMALS_LABEL: Record<CurrencyDecimals, string> = {
+  2: "до сотых — 1 234,50",
+  0: "целые — 1 235",
+};
+
+interface CalcDraft {
+  /** Порядок значим: первая валюта — по умолчанию для нового КП. */
+  currencies: CurrencyDraft[];
   directionCoef: Record<DirectionKey, string>;
   directionCoefficients: Record<DirectionKey, CoefficientKey[]>;
   bundle: {
@@ -32,8 +54,12 @@ const numStr = (n: number) => String(n);
 
 function toDraft(cfg: CalcConfig): CalcDraft {
   return {
-    baseCost: numStr(cfg.baseCost),
-    hourRate: numStr(cfg.hourRate),
+    currencies: cfg.currencies.map((c) => ({
+      name: c.name,
+      baseCost: numStr(c.baseCost),
+      hourRate: numStr(c.hourRate),
+      decimals: c.decimals,
+    })),
     directionCoef: Object.fromEntries(
       DIRECTION_ORDER.map((k) => [k, numStr(cfg.directionCoef[k])]),
     ) as Record<DirectionKey, string>,
@@ -76,14 +102,43 @@ function fromDraft(draft: CalcDraft): { config?: CalcConfig; errors: string[] } 
     return n;
   };
 
+  // Имя валюты — её идентификатор в КП, поэтому пустые и повторы не пропускаем.
+  const seen = new Set<string>();
+  const currencies = draft.currencies.map((c, i) => {
+    const name = normalizeCurrencyName(c.name);
+    if (!c.name.trim()) {
+      errors.push(`Валюта №${i + 1}: укажите название`);
+    } else if (!name) {
+      errors.push(`Валюта №${i + 1}: название — ${CURRENCY_NAME_HINT}`);
+    } else if (seen.has(currencyKey(name))) {
+      errors.push(`Валюта №${i + 1}: «${name}» уже есть в списке`);
+    } else {
+      seen.add(currencyKey(name));
+    }
+    const shown = name ?? `валюта №${i + 1}`;
+    const hourRate = need(c.hourRate, `Стоимость часа (${shown})`);
+    if (!hourRateFitsDecimals(hourRate, c.decimals)) {
+      errors.push(
+        c.decimals === 0
+          ? `Стоимость часа (${shown}): при целых суммах нужна целая ставка — иначе цены печатались бы с округлением`
+          : `Стоимость часа (${shown}): не больше ${c.decimals} знаков после запятой`,
+      );
+    }
+    return {
+      name: name ?? "",
+      baseCost: need(c.baseCost, `Базовая стоимость (${shown})`),
+      hourRate,
+      decimals: c.decimals,
+    };
+  });
+
   const percent = Number(draft.bundle.ratePercent.replace(",", ".").trim());
   if (!Number.isFinite(percent) || percent < 0 || percent >= 100) {
     errors.push("Пакетная скидка: процент должен быть от 0 до 99,9");
   }
 
   const config: CalcConfig = {
-    baseCost: need(draft.baseCost, "Базовая стоимость"),
-    hourRate: need(draft.hourRate, "Стоимость часа"),
+    currencies,
     directionCoef: Object.fromEntries(
       DIRECTION_ORDER.map((k) => [
         k,
@@ -145,6 +200,37 @@ export default function SettingsCalc({
     patch((d) => ({
       ...d,
       coef: { ...d.coef, [group]: { ...d.coef[group], [option]: value } },
+    }));
+
+  const setCurrency = (index: number, patchRow: Partial<CurrencyDraft>) =>
+    patch((d) => ({
+      ...d,
+      currencies: d.currencies.map((c, i) =>
+        i === index ? { ...c, ...patchRow } : c,
+      ),
+    }));
+
+  const moveCurrency = (index: number, delta: number) =>
+    patch((d) => {
+      const next = [...d.currencies];
+      const [row] = next.splice(index, 1);
+      next.splice(index + delta, 0, row);
+      return { ...d, currencies: next };
+    });
+
+  const removeCurrency = (index: number) =>
+    patch((d) => ({
+      ...d,
+      currencies: d.currencies.filter((_, i) => i !== index),
+    }));
+
+  const addCurrency = () =>
+    patch((d) => ({
+      ...d,
+      currencies: [
+        ...d.currencies,
+        { name: "", baseCost: "", hourRate: "", decimals: 2 },
+      ],
     }));
 
   const toggleApplies = (key: DirectionKey, coef: CoefficientKey) =>
@@ -213,33 +299,135 @@ export default function SettingsCalc({
     <div className="space-y-6">
       <Note>
         <b>Как считается стоимость.</b> Цена направления за месяц ={" "}
-        <b>базовая стоимость</b> × <b>коэффициент направления</b> × произведение
-        отмеченных <b>коэффициентов параметров</b>, с округлением до целого. Часы
-        = цена ÷ стоимость часа. Итог за срок — сумма помесячных итогов.
+        <b>базовая стоимость</b> валюты КП × <b>коэффициент направления</b> ×
+        произведение отмеченных <b>коэффициентов параметров</b>, с округлением до
+        целого числа часов. Часы = цена ÷ стоимость часа той же валюты. Итог за
+        срок — сумма помесячных итогов.
         <br />
         Изменения действуют на <b>новые</b> КП: каждое сохранённое КП хранит копию
         этих настроек, поэтому его PDF и Excel не меняются задним числом. Чтобы
         пересчитать старое КП — импортируйте его JSON заново.
       </Note>
 
-      {/* --- Базовые ставки --- */}
+      {/* --- Базовые ставки по валютам --- */}
       <Section
-        title="Базовые ставки"
-        hint="Отправная точка расчёта — в BYN."
+        title="Базовые ставки по валютам"
+        hint="У каждой валюты своя базовая стоимость, своя стоимость часа и своя разрядность сумм в КП; коэффициенты ниже общие для всех валют. Валюту выбирают при создании КП, первая в списке подставляется по умолчанию. Уже сохранённые КП правка не задевает."
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <NumberField
-            label="Базовая стоимость SEO, BYN / мес"
-            hint="Сумма, от которой считается каждое направление до применения коэффициентов."
-            value={draft.baseCost}
-            onChange={(v) => patch((d) => ({ ...d, baseCost: v }))}
-          />
-          <NumberField
-            label="Стоимость часа, BYN"
-            hint="Из неё получается объём работ: часы = цена направления ÷ стоимость часа. На саму цену не влияет."
-            value={draft.hourRate}
-            onChange={(v) => patch((d) => ({ ...d, hourRate: v }))}
-          />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm border-collapse min-w-[760px]">
+            <thead>
+              <tr className="bg-brand-green text-white">
+                <th className="text-left font-semibold px-3 py-2 rounded-l-lg">
+                  Валюта
+                </th>
+                <th className="text-left font-semibold px-3 py-2">
+                  Базовая стоимость SEO / мес
+                </th>
+                <th className="text-left font-semibold px-3 py-2">
+                  Стоимость часа
+                </th>
+                <th className="text-left font-semibold px-3 py-2">
+                  Разрядность сумм
+                </th>
+                <th className="px-3 py-2 rounded-r-lg" />
+              </tr>
+            </thead>
+            <tbody>
+              {draft.currencies.map((c, i) => (
+                <tr key={i} className="border-b border-gray-100">
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={c.name}
+                        maxLength={CURRENCY_NAME_MAX}
+                        placeholder="USD"
+                        aria-label={`Название валюты №${i + 1}`}
+                        onChange={(e) => setCurrency(i, { name: e.target.value })}
+                        className="ui-input w-24 px-2 py-1"
+                      />
+                      {i === 0 && (
+                        <span className="rounded bg-brand-yellow text-brand-ink px-1.5 py-0.5 text-[11px] font-semibold whitespace-nowrap">
+                          по умолчанию
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-3 py-2">
+                    <NumInput
+                      wide
+                      value={c.baseCost}
+                      onChange={(v) => setCurrency(i, { baseCost: v })}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <NumInput
+                      wide
+                      value={c.hourRate}
+                      onChange={(v) => setCurrency(i, { hourRate: v })}
+                    />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select
+                      value={c.decimals}
+                      aria-label={`Разрядность сумм, валюта №${i + 1}`}
+                      onChange={(e) =>
+                        setCurrency(i, {
+                          decimals: Number(e.target.value) as CurrencyDecimals,
+                        })
+                      }
+                      className="ui-input w-auto px-2 py-1"
+                    >
+                      {CURRENCY_DECIMALS.map((d) => (
+                        <option key={d} value={d}>
+                          {DECIMALS_LABEL[d]}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex justify-end gap-1">
+                      <IconButton
+                        label="Выше"
+                        disabled={i === 0}
+                        onClick={() => moveCurrency(i, -1)}
+                      >
+                        ↑
+                      </IconButton>
+                      <IconButton
+                        label="Ниже"
+                        disabled={i === draft.currencies.length - 1}
+                        onClick={() => moveCurrency(i, 1)}
+                      >
+                        ↓
+                      </IconButton>
+                      <IconButton
+                        label="Удалить валюту"
+                        disabled={draft.currencies.length === 1}
+                        onClick={() => removeCurrency(i)}
+                      >
+                        ✕
+                      </IconButton>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={addCurrency}
+            disabled={draft.currencies.length >= MAX_CURRENCIES}
+            className="ui-btn-ghost"
+          >
+            + Добавить валюту
+          </button>
+          <span className="text-xs text-brand-gray">
+            Название печатается в КП рядом с суммами, {CURRENCY_NAME_HINT}.
+          </span>
         </div>
       </Section>
 
@@ -524,9 +712,12 @@ function NumberField({
 function NumInput({
   value,
   onChange,
+  wide,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Под денежные суммы: коэффициентам хватает узкого поля. */
+  wide?: boolean;
 }) {
   return (
     <input
@@ -534,7 +725,7 @@ function NumInput({
       inputMode="decimal"
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="ui-input w-20 text-right px-2 py-1"
+      className={`ui-input ${wide ? "w-32" : "w-20"} text-right px-2 py-1`}
     />
   );
 }

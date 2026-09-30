@@ -13,6 +13,7 @@ import {
   formatMoney,
   formatMonthlyHours,
   formatMonthlyMoney,
+  type MoneyFormat,
 } from "../../format";
 import type { PitchDirection } from "../../pitch";
 import type { DirectionScheduleCalc, DirectionSelection } from "../../types";
@@ -222,10 +223,13 @@ export function DirectionWorksSlide({
   direction,
   calc,
   durationMonths,
+  money,
 }: {
   direction: DirectionSelection;
   calc: DirectionScheduleCalc;
   durationMonths: number;
+  /** Валюта и разрядность КП (`ScheduleResult`): у итогов направления их нет. */
+  money: MoneyFormat;
 }) {
   const active = new Set(calc.activeMonths);
   const discounted = calc.totalFullPrice > calc.totalPrice;
@@ -260,7 +264,7 @@ export function DirectionWorksSlide({
           <Text style={s.bannerLabel}>Стоимость в месяц</Text>
           <View style={[s.sumPlate, platePadding(SUM_FS, 4)]}>
             <SumText
-              text={formatMonthlyMoney(calc.pricePerMonth)}
+              text={formatMonthlyMoney(calc.pricePerMonth, money)}
               size={SUM_FS}
               style={s.sumText}
             />
@@ -269,11 +273,11 @@ export function DirectionWorksSlide({
             <Text style={s.bannerSub}>
               без скидки{" "}
               <Text style={s.strike}>
-                {formatMonthlyMoney(calc.fullPricePerMonth)}
+                {formatMonthlyMoney(calc.fullPricePerMonth, money)}
               </Text>
               {" · экономия "}
               <Text style={{ color: DECK.greenDeep, fontWeight: 700 }}>
-                {formatMonthlyMoney(discountPerMonth)}
+                {formatMonthlyMoney(discountPerMonth, money)}
               </Text>
             </Text>
           )}
@@ -287,7 +291,9 @@ export function DirectionWorksSlide({
               <View key={m} style={[s.dot, active.has(m) ? s.dotOn : {}]} />
             ))}
           </View>
-          <Text style={s.bannerSub}>за срок — {formatMoney(calc.totalPrice)}</Text>
+          <Text style={s.bannerSub}>
+            за срок — {formatMoney(calc.totalPrice, money)}
+          </Text>
         </View>
 
         <View style={[s.bannerCell, s.bannerDivider]}>
