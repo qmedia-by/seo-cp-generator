@@ -21,10 +21,14 @@ import type {
   Region,
 } from "./types";
 
-/** Базовая стоимость SEO (E1) и стоимость часа (E2) из Excel. */
+/** Базовая стоимость SEO (E1) и стоимость часа (E2) из Excel — в `DEFAULT_CURRENCY`. */
 export const BASE_COST = 750;
 export const HOUR_RATE = 75;
-export const CURRENCY = "BYN";
+/**
+ * Валюта по умолчанию: единственная в дефолтных настройках и та, в которой
+ * считаются КП, сохранённые до появления выбора валюты (у них нет `input.currency`).
+ */
+export const DEFAULT_CURRENCY = "BYN";
 
 /** Коэффициент направления (E3..E7). */
 export const DIRECTION_COEF: Record<DirectionKey, number> = {

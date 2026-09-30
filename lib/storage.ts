@@ -1,13 +1,35 @@
 // Хранилище КП в Postgres (Neon/Supabase): таблица proposals(id, created_at, data jsonb).
 
 import { calculateSchedule, normalizeActiveMonths } from "./calc";
-import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc-config";
+import {
+  DEFAULT_CALC_CONFIG,
+  findCurrency,
+  resolveCurrency,
+  type CalcConfig,
+} from "./calc-config";
 import { ensureSchema, getPool } from "./db";
+import { DEFAULT_CURRENCY } from "./seo-config";
 import type { CreateProposalPayload } from "./validation";
 import type { DirectionSelection, Proposal } from "./types";
 
 /** id состоит только из hex/дефисов (как у crypto.randomUUID). Некорректный → «не найдено». */
 const ID_RE = /^[a-f0-9-]{8,64}$/i;
+
+/**
+ * Валюта КП должна быть в текущих настройках: пересчитать КП молча в другой
+ * валюте нельзя — цифры поменяли бы смысл. JSON, сохранённый до выбора валюты,
+ * валюты не несёт — тогда всё считалось в `DEFAULT_CURRENCY`.
+ * Возвращает текст ошибки для ответа API или `null`, если всё в порядке.
+ */
+export function proposalCurrencyError(
+  payload: CreateProposalPayload,
+  config: CalcConfig,
+): string | null {
+  const name = payload.input.currency ?? DEFAULT_CURRENCY;
+  return findCurrency(config, name)
+    ? null
+    : `Валюта «${name}» не настроена — добавьте её в «Настройки → Данные для расчёта» или выберите другую.`;
+}
 
 /**
  * Собрать Proposal из входных данных: посчитать снимок расчёта, выдать id и дату.
@@ -27,11 +49,17 @@ export function buildProposal(
     activeMonths: normalizeActiveMonths(d, payload.input.durationMonths),
     works: d.works,
   }));
-  const calcSnapshot = calculateSchedule(payload.input, directions, config);
+  // Валюта в КП всегда явная и в написании из настроек («usd» → «USD»):
+  // у старого JSON её нет, а снимок должен читаться без догадок.
+  const input = {
+    ...payload.input,
+    currency: resolveCurrency(config, payload.input.currency).name,
+  };
+  const calcSnapshot = calculateSchedule(input, directions, config);
   return {
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
-    input: payload.input,
+    input,
     directions,
     meta: payload.meta,
     manager: payload.manager,
@@ -79,6 +107,7 @@ export interface ProposalSummary {
   monthlyTotalPrice: number;
   totalPrice: number;
   currency: string;
+  decimals: number;
   includedCount: number;
 }
 
@@ -95,6 +124,8 @@ function toSummary(p: Proposal): ProposalSummary {
     monthlyTotalPrice: duration > 0 ? Math.round(totalPrice / duration) : 0,
     totalPrice,
     currency: p.calcSnapshot.currency,
+    // В снимках КП до появления валют разрядности нет — там всё было до сотых.
+    decimals: p.calcSnapshot.decimals ?? 2,
     includedCount: p.directions.filter(
       (d) => normalizeActiveMonths(d, duration).length > 0,
     ).length,

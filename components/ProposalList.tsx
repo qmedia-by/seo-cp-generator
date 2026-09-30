@@ -126,10 +126,10 @@ export default function ProposalList() {
 
               <div className="flex items-baseline gap-3">
                 <span className="text-xl font-extrabold">
-                  {formatMoney(it.totalPrice)}
+                  {formatMoney(it.totalPrice, it)}
                 </span>
                 <span className="text-xs text-brand-gray">
-                  ≈ {formatMoney(it.monthlyTotalPrice)} / мес
+                  ≈ {formatMoney(it.monthlyTotalPrice, it)} / мес
                 </span>
               </div>
 

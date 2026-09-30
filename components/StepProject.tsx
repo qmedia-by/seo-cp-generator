@@ -15,12 +15,20 @@ import type { ProposalInput, ProposalMeta } from "@/lib/types";
 
 interface Props {
   input: ProposalInput;
+  /** Названия валют из настроек; первая — по умолчанию. */
+  currencies: string[];
   meta: ProposalMeta;
   onInput: (patch: Partial<ProposalInput>) => void;
   onMeta: (patch: Partial<ProposalMeta>) => void;
 }
 
-export default function StepProject({ input, meta, onInput, onMeta }: Props) {
+export default function StepProject({
+  input,
+  currencies,
+  meta,
+  onInput,
+  onMeta,
+}: Props) {
   return (
     <div className="space-y-6">
       <div>
@@ -66,6 +74,13 @@ export default function StepProject({ input, meta, onInput, onMeta }: Props) {
             ))}
           </div>
         </Field>
+
+        <Select
+          label="Валюта"
+          value={input.currency ?? currencies[0]}
+          options={currencies}
+          onChange={(v) => onInput({ currency: v })}
+        />
 
         <Select
           label="Для кого"

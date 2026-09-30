@@ -50,6 +50,7 @@ export default function StepReview({
     ["Сайт", input.siteName || "—"],
     ["Регион", input.region],
     ["Срок", `${input.durationMonths} мес`],
+    ["Валюта", calc.currency],
     ["Для кого", input.audience],
     ["Что продвигаем", input.promoteType],
     ["Кол-во страниц", input.pages],
@@ -130,11 +131,11 @@ export default function StepReview({
                         <>
                           {discounted && (
                             <span className="text-brand-gray line-through text-xs mr-1.5">
-                              {formatMoney(d.totalFullPrice)}
+                              {formatMoney(d.totalFullPrice, calc)}
                             </span>
                           )}
                           <span className="font-semibold">
-                            {formatMoney(d.totalPrice)}
+                            {formatMoney(d.totalPrice, calc)}
                           </span>
                         </>
                       ) : (
@@ -155,7 +156,7 @@ export default function StepReview({
                   </td>
                 ))}
                 <td className="px-3 py-2 text-right rounded-r-lg whitespace-nowrap">
-                  {formatMoney(calc.totalPrice)}
+                  {formatMoney(calc.totalPrice, calc)}
                 </td>
               </tr>
             </tbody>
@@ -199,11 +200,11 @@ export default function StepReview({
                     <>
                       {discounted && (
                         <span className="text-brand-gray line-through text-xs mr-2">
-                          {formatMoney(c.totalFullPrice)}
+                          {formatMoney(c.totalFullPrice, calc)}
                         </span>
                       )}
                       <span className="font-semibold">
-                        {formatMoney(c.totalPrice)}
+                        {formatMoney(c.totalPrice, calc)}
                       </span>
                       <span className="text-brand-gray text-xs ml-2">
                         {formatHours(c.totalHours)} за срок

@@ -4,8 +4,12 @@
 // `DEFAULT_CALC_CONFIG`, т.е. значения из Excel). Актуальный конфиг администратор
 // правит в «Настройках»; сохранённое КП хранит его снимок — см. lib/calc-config.ts.
 
-import { DEFAULT_CALC_CONFIG, type CalcConfig } from "./calc-config";
-import { CURRENCY, DIRECTION_NAME, DIRECTION_ORDER } from "./seo-config";
+import {
+  DEFAULT_CALC_CONFIG,
+  resolveCurrency,
+  type CalcConfig,
+} from "./calc-config";
+import { DIRECTION_NAME, DIRECTION_ORDER, HOUR_RATE } from "./seo-config";
 import { formatMonthRanges } from "./format";
 import type {
   CalcResult,
@@ -31,8 +35,9 @@ function coefValue(
 }
 
 /**
- * «Сырая» цена направления за месяц по формуле Excel (BYN), без приведения
- * к кратности ставки часа. 0 — если направление выключено.
+ * «Сырая» цена направления за месяц по формуле Excel (в валюте `input.currency`,
+ * см. `resolveCurrency`), без приведения к кратности ставки часа. 0 — если
+ * направление выключено.
  *
  * Готовая цена, которая уходит в КП, — это `quantizePrice` от этого числа
  * (см. `calculate`): клиент видит цену и объём часов вместе, поэтому они обязаны
@@ -45,7 +50,8 @@ export function directionMonthlyPrice(
   config: CalcConfig = DEFAULT_CALC_CONFIG,
 ): number {
   if (!included) return 0;
-  let price = config.baseCost * config.directionCoef[key];
+  const { baseCost } = resolveCurrency(config, input.currency);
+  let price = baseCost * config.directionCoef[key];
   for (const coef of config.directionCoefficients[key]) {
     price *= coefValue(coef, input, config);
   }
@@ -55,7 +61,7 @@ export function directionMonthlyPrice(
 /** Часы из стоимости — как в Excel: ROUND(цена / ставка). */
 export function priceToHours(
   price: number,
-  hourRate: number = DEFAULT_CALC_CONFIG.hourRate,
+  hourRate: number = HOUR_RATE,
 ): number {
   return Math.round(price / hourRate);
 }
@@ -71,7 +77,7 @@ export function priceToHours(
  */
 export function quantizePrice(
   price: number,
-  hourRate: number = DEFAULT_CALC_CONFIG.hourRate,
+  hourRate: number = HOUR_RATE,
 ): number {
   if (price <= 0) return 0;
   return Math.max(1, Math.round(price / hourRate)) * hourRate;
@@ -100,12 +106,18 @@ export function calculate(
   );
 
   const bundleActive = includedByKey.get(config.bundle.trigger) ?? false;
+  // Деньги — в валюте КП: у каждой валюты своя база и свой шаг цены (ставка часа).
+  const {
+    name: currency,
+    hourRate,
+    decimals,
+  } = resolveCurrency(config, input.currency);
 
   const perDirection: DirectionCalc[] = DIRECTION_ORDER.map((key) => {
     const included = includedByKey.get(key) ?? false;
     const fullMonthlyPrice = quantizePrice(
       directionMonthlyPrice(key, input, included, config),
-      config.hourRate,
+      hourRate,
     );
     const discountRate =
       included && bundleActive && config.bundle.discounted.includes(key)
@@ -113,7 +125,7 @@ export function calculate(
         : 0;
     const monthlyPrice =
       discountRate > 0
-        ? quantizePrice(fullMonthlyPrice * (1 - discountRate), config.hourRate)
+        ? quantizePrice(fullMonthlyPrice * (1 - discountRate), hourRate)
         : fullMonthlyPrice;
     return {
       key,
@@ -122,7 +134,7 @@ export function calculate(
       fullMonthlyPrice,
       discountRate,
       monthlyPrice,
-      monthlyHours: included ? priceToHours(monthlyPrice, config.hourRate) : 0,
+      monthlyHours: included ? priceToHours(monthlyPrice, hourRate) : 0,
     };
   });
 
@@ -140,7 +152,8 @@ export function calculate(
   );
 
   return {
-    currency: CURRENCY,
+    currency,
+    decimals,
     durationMonths: input.durationMonths,
     perDirection,
     monthlyTotalPrice,
@@ -241,8 +254,10 @@ export function calculateSchedule(
     0,
   );
 
+  const { name: currency, decimals } = resolveCurrency(config, input.currency);
   return {
-    currency: CURRENCY,
+    currency,
+    decimals,
     durationMonths,
     months,
     perDirection,

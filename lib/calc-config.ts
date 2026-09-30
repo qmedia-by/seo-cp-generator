@@ -6,7 +6,11 @@
 // см. `lib/settings.ts`. Каждое сохранённое КП хранит снимок конфига (`Proposal.calcConfig`),
 // поэтому PDF/Excel уже отправленного КП не меняются после правки настроек.
 //
-// Что НЕ настраивается (зашито в типах и формулах): валюта (BYN), варианты срока (3/6 мес),
+// Базовая стоимость и ставка часа задаются **повалютно** (`currencies`): у каждой валюты
+// свои деньги, а коэффициенты и пакетная скидка безразмерны и общие для всех. Валюту
+// выбирает менеджер в визарде (`ProposalInput.currency`), по умолчанию — первая в списке.
+//
+// Что НЕ настраивается (зашито в типах и формулах): варианты срока (3/6 мес),
 // сами наборы опций (список регионов, вариантов страниц и т.д.) и правила округления.
 
 import {
@@ -18,6 +22,7 @@ import {
   COMPETITION_OPTIONS,
   DIRECTION_COEF,
   DIRECTION_COEFFICIENTS,
+  DEFAULT_CURRENCY,
   DIRECTION_ORDER,
   ERRORS_COEF,
   ERRORS_OPTIONS,
@@ -62,12 +67,36 @@ export interface BundleConfig {
   rate: number;
 }
 
+/** Денежные ставки одной валюты. */
+export interface CurrencyRates {
+  /**
+   * Название валюты — ровно так оно печатается в КП («5 952,00 BYN»). Оно же —
+   * идентификатор: КП ссылается на валюту по имени (`ProposalInput.currency`).
+   */
+  name: string;
+  /** Базовая стоимость SEO за месяц, от неё считается каждое направление. */
+  baseCost: number;
+  /** Стоимость часа работ — из неё считается объём часов и шаг цены. */
+  hourRate: number;
+  /**
+   * Разрядность сумм в КП: 2 — до сотых («1 425,00 BYN»), 0 — целые
+   * («3 345 000 руб.»): у крупных валют копейки — шум, а длинные суммы не
+   * влезают в плашки PDF. На расчёт не влияет — только на печать.
+   */
+  decimals: CurrencyDecimals;
+}
+
+/** Допустимая разрядность сумм. */
+export const CURRENCY_DECIMALS = [2, 0] as const;
+export type CurrencyDecimals = (typeof CURRENCY_DECIMALS)[number];
+
 /** Полный набор настраиваемых величин расчёта. */
 export interface CalcConfig {
-  /** Базовая стоимость SEO за месяц (BYN), от неё считается каждое направление. */
-  baseCost: number;
-  /** Стоимость часа работ (BYN) — из неё считается объём часов. */
-  hourRate: number;
+  /**
+   * Ставки по валютам: минимум одна, первая — валюта по умолчанию для нового КП.
+   * Имена уникальны без учёта регистра.
+   */
+  currencies: CurrencyRates[];
   /** Множитель направления. */
   directionCoef: Record<DirectionKey, number>;
   /** Какие коэффициенты параметров входят в формулу направления. */
@@ -77,8 +106,14 @@ export interface CalcConfig {
 }
 
 export const DEFAULT_CALC_CONFIG: CalcConfig = {
-  baseCost: BASE_COST,
-  hourRate: HOUR_RATE,
+  currencies: [
+    {
+      name: DEFAULT_CURRENCY,
+      baseCost: BASE_COST,
+      hourRate: HOUR_RATE,
+      decimals: 2,
+    },
+  ],
   directionCoef: { ...DIRECTION_COEF },
   directionCoefficients: {
     commercial: [...DIRECTION_COEFFICIENTS.commercial],
@@ -106,8 +141,7 @@ export const DEFAULT_CALC_CONFIG: CalcConfig = {
 /** Глубокая копия — чтобы правки черновика не задевали дефолты/снимки. */
 export function cloneCalcConfig(cfg: CalcConfig): CalcConfig {
   return {
-    baseCost: cfg.baseCost,
-    hourRate: cfg.hourRate,
+    currencies: cfg.currencies.map((c) => ({ ...c })),
     directionCoef: { ...cfg.directionCoef },
     directionCoefficients: Object.fromEntries(
       DIRECTION_KEYS.map((k) => [k, [...cfg.directionCoefficients[k]]]),
@@ -117,6 +151,66 @@ export function cloneCalcConfig(cfg: CalcConfig): CalcConfig {
       COEF_GROUPS.map((g) => [g.key, { ...cfg.coef[g.key] }]),
     ) as unknown as CoefTables,
   };
+}
+
+// --- Валюты ---
+
+/** Максимальная длина названия валюты: «BYN», «USD», «руб.». Длиннее — рвёт плашки PDF. */
+export const CURRENCY_NAME_MAX = 5;
+/** Сколько валют можно завести в настройках. */
+export const MAX_CURRENCIES = 10;
+/**
+ * Символы названия не ограничены (решение заказчика) — только длина. Кавычки
+ * и прочие спецсимволы формата Excel экранирует `buildWorkbook`.
+ */
+export const CURRENCY_NAME_HINT = `до ${CURRENCY_NAME_MAX} символов`;
+
+/** Название валюты без пробелов по краям, если его длина допустима; иначе `null`. */
+export function normalizeCurrencyName(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const name = raw.trim();
+  return name.length > 0 && name.length <= CURRENCY_NAME_MAX ? name : null;
+}
+
+/** Число знаков после запятой у числа (`22.5` → 1). */
+function fractionDigits(n: number): number {
+  const s = String(n);
+  const dot = s.indexOf(".");
+  return dot < 0 ? 0 : s.length - dot - 1;
+}
+
+/**
+ * Ставка часа должна печататься без округления: все цены КП кратны ей, и при
+ * «целых» суммах ставка 22,5 дала бы цену 427,5, которая напечаталась бы как 428.
+ */
+export function hourRateFitsDecimals(hourRate: number, decimals: number): boolean {
+  return fractionDigits(hourRate) <= decimals;
+}
+
+/** Ключ для сравнения имён: «usd» и «USD» — одна и та же валюта. */
+export const currencyKey = (name: string) => name.trim().toLowerCase();
+
+/** Валюта из настроек по имени (без учёта регистра) или `undefined`. */
+export function findCurrency(
+  config: CalcConfig,
+  name: string,
+): CurrencyRates | undefined {
+  const key = currencyKey(name);
+  return config.currencies.find((c) => currencyKey(c.name) === key);
+}
+
+/**
+ * Ставки, по которым считается КП. Нет имени — это КП, сохранённое до выбора
+ * валюты, а тогда всё считалось в `DEFAULT_CURRENCY`. Неизвестное имя (руками
+ * поправленный JSON) — первая валюта списка: подпись и цифры всё равно сойдутся,
+ * потому что `CalcResult.currency` берётся отсюда же. Штатно неизвестная валюта
+ * до расчёта не доходит — её отсекают API-роуты.
+ */
+export function resolveCurrency(
+  config: CalcConfig,
+  name: string | undefined,
+): CurrencyRates {
+  return findCurrency(config, name ?? DEFAULT_CURRENCY) ?? config.currencies[0];
 }
 
 // --- Метаданные для интерфейса настроек ---
@@ -217,8 +311,7 @@ export function mergeCalcConfig(raw: unknown): CalcConfig {
   const coefKeys = COEF_GROUPS.map((g) => g.key);
 
   return {
-    baseCost: num(raw.baseCost, d.baseCost),
-    hourRate: num(raw.hourRate, d.hourRate),
+    currencies: mergeCurrencies(raw),
     directionCoef: Object.fromEntries(
       DIRECTION_KEYS.map((k) => [k, num(rawDirCoef[k], d.directionCoef[k])]),
     ) as Record<DirectionKey, number>,
@@ -259,6 +352,53 @@ export function mergeCalcConfig(raw: unknown): CalcConfig {
       }),
     ) as unknown as CoefTables,
   };
+}
+
+/**
+ * Список валют из «сырого» JSON. Запись с недопустимым именем или битыми
+ * числами выбрасывается целиком: подставить в неё дефолтные BYN-овые 750/75 значило
+ * бы молча посчитать, например, доллары по рублёвой ставке. Повтор имени — тоже
+ * выбрасывается (первая побеждает).
+ *
+ * Пусто (настройки и снимки КП до появления валют хранили одну пару
+ * `baseCost`/`hourRate`, или всё битое) — **легаси-путь**: одна валюта
+ * `DEFAULT_CURRENCY` из старых полей. Так без миграции БД читаются и строка
+ * настроек, и снимки всех старых КП.
+ */
+function mergeCurrencies(raw: Record<string, unknown>): CurrencyRates[] {
+  const list: CurrencyRates[] = [];
+  const seen = new Set<string>();
+  for (const item of Array.isArray(raw.currencies) ? raw.currencies : []) {
+    if (!isRecord(item)) continue;
+    const name = normalizeCurrencyName(item.name);
+    const baseCost = num(item.baseCost, NaN);
+    const hourRate = num(item.hourRate, NaN);
+    if (!name || Number.isNaN(baseCost) || Number.isNaN(hourRate)) continue;
+    if (seen.has(currencyKey(name))) continue;
+    seen.add(currencyKey(name));
+    const decimals = decimalsOf(item.decimals, hourRate);
+    list.push({ name, baseCost, hourRate, decimals });
+    if (list.length === MAX_CURRENCIES) break;
+  }
+  if (list.length > 0) return list;
+  return [
+    {
+      name: DEFAULT_CURRENCY,
+      baseCost: num(raw.baseCost, BASE_COST),
+      hourRate: num(raw.hourRate, HOUR_RATE),
+      decimals: 2,
+    },
+  ];
+}
+
+/**
+ * Разрядность — только печать, поэтому битое значение не повод выбрасывать
+ * валюту: берём «до сотых». Туда же откатываются «целые» при дробной ставке
+ * часа — иначе суммы печатались бы с округлением.
+ */
+function decimalsOf(raw: unknown, hourRate: number): CurrencyDecimals {
+  const n = Number(raw);
+  return n === 0 && hourRateFitsDecimals(hourRate, 0) ? 0 : 2;
 }
 
 function rateOrDefault(raw: unknown, fallback: number): number {

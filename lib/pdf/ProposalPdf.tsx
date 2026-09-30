@@ -114,6 +114,7 @@ export function ProposalDocument({
               direction={d}
               calc={c}
               durationMonths={calc.durationMonths}
+              money={calc}
             />,
           );
         }

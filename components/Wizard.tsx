@@ -115,7 +115,11 @@ export default function Wizard({
     buildWorksCatalog(works),
   );
   const [step, setStep] = useState(0);
-  const [input, setInput] = useState<ProposalInput>(DEFAULT_INPUT);
+  // Валюта по умолчанию — первая в настройках.
+  const [input, setInput] = useState<ProposalInput>(() => ({
+    ...DEFAULT_INPUT,
+    currency: config.currencies[0].name,
+  }));
   const [meta, setMeta] = useState<ProposalMeta>({});
   const [directions, setDirections] = useState<DirectionSelection[]>(() =>
     initDirections(catalog),
@@ -240,6 +244,7 @@ export default function Wizard({
           {step === 0 && (
             <StepProject
               input={input}
+              currencies={config.currencies.map((c) => c.name)}
               meta={meta}
               onInput={patchInput}
               onMeta={patchMeta}

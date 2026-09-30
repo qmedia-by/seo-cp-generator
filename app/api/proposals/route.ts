@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { getCalcConfig } from "@/lib/settings";
-import { buildProposal, listProposals, saveProposal } from "@/lib/storage";
+import {
+  buildProposal,
+  listProposals,
+  proposalCurrencyError,
+  saveProposal,
+} from "@/lib/storage";
 import { createProposalSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
@@ -27,7 +32,13 @@ export async function POST(req: Request) {
     );
   }
 
-  const proposal = buildProposal(parsed.data, await getCalcConfig());
+  const config = await getCalcConfig();
+  const currencyError = proposalCurrencyError(parsed.data, config);
+  if (currencyError) {
+    return NextResponse.json({ error: currencyError }, { status: 400 });
+  }
+
+  const proposal = buildProposal(parsed.data, config);
   await saveProposal(proposal);
   return NextResponse.json(proposal, { status: 201 });
 }

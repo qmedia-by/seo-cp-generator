@@ -3,9 +3,8 @@
 
 import ExcelJS from "exceljs";
 import { calculateSchedule } from "../calc";
-import { mergeCalcConfig } from "../calc-config";
+import { mergeCalcConfig, resolveCurrency } from "../calc-config";
 import { BRAND, COMPANY } from "../company";
-import { CURRENCY } from "../seo-config";
 import type { Proposal } from "../types";
 
 // Фирстиль Qmedia: зелёный — основной (шапки/секции), жёлтый — акцент (итог).
@@ -38,13 +37,25 @@ function sectionRow(ws: ExcelJS.Worksheet, label: string) {
   return row;
 }
 
+/**
+ * Произвольный текст как литерал формата ячейки Excel. Символы названия валюты
+ * не ограничены, а в кавычках формата кавычка недопустима, поэтому каждый
+ * символ экранируем обратной косой: `\р\у\б\.`, `\"` — всё выводится как есть.
+ */
+function excelLiteral(text: string): string {
+  return Array.from(text, (ch) => `\\${ch}`).join("");
+}
+
 export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
   const { input, directions } = proposal;
   // Ставки и коэффициенты берём из снимка настроек этого КП (см. Proposal.calcConfig),
   // чтобы Excel и PDF одного КП всегда сходились между собой.
   const cfg = mergeCalcConfig(proposal.calcConfig);
   const calc = calculateSchedule(input, directions, cfg);
-  const money = `# ##0.00 "${CURRENCY}"`;
+  // Ставки — той валюты, в которой считано КП.
+  const rates = resolveCurrency(cfg, input.currency);
+  const digits = calc.decimals > 0 ? "." + "0".repeat(calc.decimals) : "";
+  const money = `# ##0${digits} ${excelLiteral(calc.currency)}`;
   const monthNums = calc.months.map((m) => m.month);
 
   const wb = new ExcelJS.Workbook();
@@ -92,8 +103,9 @@ export async function buildWorkbook(proposal: Proposal): Promise<Buffer> {
     if (col <= 3) headerFill(c);
   });
 
-  ws.addRow(["Базовая стоимость SEO", cfg.baseCost, ""]);
-  ws.addRow(["Стоимость часа", cfg.hourRate, ""]);
+  ws.addRow(["Валюта", calc.currency, ""]);
+  ws.addRow(["Базовая стоимость SEO", rates.baseCost, ""]).getCell(2).numFmt = money;
+  ws.addRow(["Стоимость часа", rates.hourRate, ""]).getCell(2).numFmt = money;
   ws.addRow(["Регион", input.region, cfg.coef.region[input.region]]);
   ws.addRow(["Для кого", input.audience, cfg.coef.audience[input.audience]]);
   ws.addRow(["Что продвигаем", input.promoteType, "—"]);

@@ -151,7 +151,34 @@ Font.registerHyphenationCallback((word) => {
   return parts.flatMap((part) => (part.endsWith("-") ? [part, ""] : [part]));
 });
 
-export const FONT = "Verdana";
+/**
+ * Запасной шрифт колоды — для знаков, которых в Verdana нет. Главный случай —
+ * «₽»: символы названия валюты в настройках не ограничены, а в Verdana 5.0x
+ * знака рубля нет. Без запасного react-pdf подставлял Helvetica (стандартный
+ * шрифт с кодировкой WinAnsi), и «₽» печатался как «½».
+ *
+ * `fontFamily` массивом: textkit берёт каждый знак из первого шрифта, где он
+ * есть, поэтому весь остальной текст по-прежнему Verdana и раскладка не
+ * меняется (сверено попиксельно), а PT Sans попадает в PDF, только если
+ * понадобился. PT Sans (OFL) — тот же, что в веб-интерфейсе, там «₽» есть.
+ * Регистрируем все четыре начертания: без курсива рендер упал бы с «Could not
+ * resolve font» на первом же курсивном фрагменте.
+ */
+Font.register({
+  family: "QmediaSans",
+  fonts: [
+    { src: path.join(FONT_DIR, "QmediaSans-Regular.ttf") },
+    { src: path.join(FONT_DIR, "QmediaSans-Bold.ttf"), fontWeight: 700 },
+    { src: path.join(FONT_DIR, "QmediaSans-Italic.ttf"), fontStyle: "italic" },
+    {
+      src: path.join(FONT_DIR, "QmediaSans-BoldItalic.ttf"),
+      fontStyle: "italic",
+      fontWeight: 700,
+    },
+  ],
+});
+
+export const FONT = ["Verdana", "QmediaSans"];
 
 // --- Метрики шрифта --------------------------------------------------------
 
@@ -222,6 +249,43 @@ export function alignCapTop(base: number, size: number) {
 /** `top` для абсолютной строки, чтобы она встала по центру полосы высотой `h`. */
 export function centerTextTop(h: number, fontSize: number) {
   return h / 2 - (fontSize / 2 + GLYPH_SINK_RATIO * fontSize);
+}
+
+// --- Ширина чисел ------------------------------------------------------------
+
+/**
+ * Ширины знаков Verdana Bold в долях кегля (`advanceWidth / unitsPerEm`,
+ * замер fontkit). Цифры у Verdana моноширинные, поэтому ширину суммы можно
+ * посчитать без раскладки. Меняешь шрифт — перемерь.
+ */
+const BOLD_DIGIT_RATIO = 1456 / 2048;
+/** Пробел и неразрывный пробел — разделитель разрядов в ru-RU. */
+const BOLD_SPACE_RATIO = 700 / 2048;
+/** Запятая — десятичный разделитель в ru-RU. */
+const BOLD_COMMA_RATIO = 740 / 2048;
+
+/** Ширина жирного числа («557 500», «1 425,00») в пунктах. */
+export function boldNumberWidth(text: string, fontSize: number) {
+  let em = 0;
+  for (const ch of text) {
+    em +=
+      ch === " " || ch === " "
+        ? BOLD_SPACE_RATIO
+        : ch === ","
+          ? BOLD_COMMA_RATIO
+          : BOLD_DIGIT_RATIO; // прочее — с запасом, по ширине цифры
+  }
+  return em * fontSize;
+}
+
+/**
+ * Кегль, при котором самое длинное из жирных чисел влезает в `width` пунктов,
+ * но не крупнее `max`. Нужен ячейкам, куда сумма любой валюты должна влезть
+ * в одну строку: у крупных валют (рубли, тенге) числа на 2–3 разряда длиннее.
+ */
+export function fitNumberSize(texts: string[], width: number, max: number) {
+  const widest = Math.max(0, ...texts.map((t) => boldNumberWidth(t, 1)));
+  return widest > 0 ? Math.min(max, width / widest) : max;
 }
 
 // --- Жёлтая плашка вокруг строки ------------------------------------------

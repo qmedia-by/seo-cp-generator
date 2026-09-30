@@ -59,6 +59,12 @@ export interface ProposalInput {
   errors: Errors;
   linkBuilding: LinkBuilding;
   competition: Competition;
+  /**
+   * Валюта КП — имя из `CalcConfig.currencies`; по ней выбираются базовая
+   * стоимость и ставка часа (`resolveCurrency`). Визард и API ставят её всегда;
+   * необязательна только ради КП, сохранённых до выбора валюты, — те в BYN.
+   */
+  currency?: string;
 }
 
 /** Один пункт работ внутри направления. */
@@ -128,11 +134,11 @@ export interface DirectionCalc {
   key: DirectionKey;
   name: string;
   included: boolean;
-  /** Полная стоимость за месяц до скидки (BYN). 0 — если выключено. */
+  /** Полная стоимость за месяц до скидки (в валюте КП). 0 — если выключено. */
   fullMonthlyPrice: number;
   /** Доля пакетной скидки 0..1 (например 0.3). 0 — скидки нет. */
   discountRate: number;
-  /** Итоговая стоимость за месяц со скидкой (BYN). 0 — если выключено. */
+  /** Итоговая стоимость за месяц со скидкой (в валюте КП). 0 — если выключено. */
   monthlyPrice: number;
   /** Часов в месяц (по итоговой цене со скидкой). */
   monthlyHours: number;
@@ -140,7 +146,10 @@ export interface DirectionCalc {
 
 /** Полный результат расчёта одного месяца. */
 export interface CalcResult {
+  /** Валюта КП (имя из настроек) — подпись у сумм. */
   currency: string;
+  /** Разрядность сумм валюты КП: 2 — до сотых, 0 — целые. */
+  decimals: number;
   durationMonths: DurationMonths;
   perDirection: DirectionCalc[];
   /** Итог за месяц по включённым направлениям (со скидками). */
@@ -196,7 +205,13 @@ export interface DirectionScheduleCalc {
 
 /** Полный результат расчёта с учётом помесячного графика. */
 export interface ScheduleResult {
+  /** Валюта КП (имя из настроек) — подпись у сумм. */
   currency: string;
+  /**
+   * Разрядность сумм валюты КП: 2 — до сотых, 0 — целые. В снимках КП,
+   * сохранённых до валют, поля нет (там всё было до сотых).
+   */
+  decimals: number;
   durationMonths: DurationMonths;
   /** Помесячная разбивка (длина = durationMonths). */
   months: MonthBreakdown[];
